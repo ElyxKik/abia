@@ -350,23 +350,180 @@
           
           <!-- Chat Input -->
           <div class="border-t border-neutral-200 dark:border-neutral-700 p-4">
-            <div class="relative">
-              <textarea id="chat-input" class="input pr-24 resize-none h-12 py-3" placeholder="Envoyez un message..."></textarea>
-              <div class="absolute right-2 top-2 flex space-x-1">
-                <button id="file-upload-button" class="p-2 text-neutral-500 hover:text-neutral-700 dark:text-neutral-400 dark:hover:text-neutral-200" title="Joindre un fichier">
+            <div class="flex">
+              <div class="flex-1 relative">
+                <textarea id="chat-input" class="w-full border border-neutral-300 dark:border-neutral-600 rounded-lg px-4 py-2 pr-10 dark:bg-neutral-800 resize-none overflow-hidden" placeholder="Posez votre question..."></textarea>
+                <button id="file-upload-button" class="absolute right-3 top-2 text-neutral-500 hover:text-neutral-700 dark:hover:text-neutral-300">
                   <i class="fas fa-paperclip"></i>
                 </button>
-                <input type="file" id="file-upload-input" class="hidden" />
-                <button class="p-2 text-neutral-500 hover:text-neutral-700 dark:text-neutral-400 dark:hover:text-neutral-200">
-                  <i class="fas fa-microphone"></i>
-                </button>
-                <button id="send-message" class="p-2 text-primary-600 hover:text-primary-700 dark:text-primary-400 dark:hover:text-primary-300">
-                  <i class="fas fa-paper-plane"></i>
-                </button>
+                <input type="file" id="file-upload" class="hidden" multiple />
+              </div>
+              <button id="send-message" class="ml-2 bg-primary-600 hover:bg-primary-700 text-white rounded-lg px-4 py-2 flex items-center justify-center">
+                <i class="fas fa-paper-plane"></i>
+              </button>
+            </div>
+            <div id="file-preview" class="mt-2 hidden">
+              <!-- File previews will be added here -->
+            </div>
+          </div>
+        </div>
+        
+        <!-- Excel Agent View -->
+        <div id="excel-agent-view" class="h-full flex flex-col" style="display: none;">
+          <div class="p-6">
+            <h1 class="text-2xl font-bold mb-6">Agent Excel</h1>
+            
+            <div class="card mb-6">
+              <h2 class="text-lg font-semibold mb-4">Analyse de fichiers Excel</h2>
+              <p class="mb-4">Importez un fichier Excel pour l'analyser et poser des questions sur vos données.</p>
+              
+              <div class="mb-4">
+                <label class="block text-sm font-medium mb-2">Fichier Excel</label>
+                <div class="flex items-center">
+                  <label class="flex-1 cursor-pointer border border-dashed border-neutral-300 dark:border-neutral-600 rounded-lg p-4 text-center hover:bg-neutral-50 dark:hover:bg-neutral-800/50">
+                    <input type="file" id="excel-file-upload" class="hidden" accept=".xlsx,.xls,.csv" />
+                    <i class="fas fa-file-excel text-xl text-secondary-500 mb-2"></i>
+                    <p class="text-sm">Glissez-déposez votre fichier Excel ou cliquez pour parcourir</p>
+                  </label>
+                </div>
+              </div>
+              
+              <div id="excel-file-preview" class="mb-4 hidden">
+                <div class="bg-neutral-100 dark:bg-neutral-800 rounded-lg p-3 flex items-center">
+                  <i class="fas fa-file-excel text-secondary-500 mr-3"></i>
+                  <div class="flex-1">
+                    <p id="excel-filename" class="text-sm font-medium">nom_du_fichier.xlsx</p>
+                    <p id="excel-filesize" class="text-xs text-neutral-500 dark:text-neutral-400">1.2 MB</p>
+                  </div>
+                  <button id="excel-file-remove" class="text-neutral-500 hover:text-red-500">
+                    <i class="fas fa-times"></i>
+                  </button>
+                </div>
               </div>
             </div>
-            <div class="mt-2 text-xs text-neutral-500 dark:text-neutral-400">
-              ABIA peut faire des erreurs. Vérifiez les informations importantes.
+            
+            <div class="card mb-6">
+              <h2 class="text-lg font-semibold mb-4">Poser une question sur vos données</h2>
+              
+              <div class="mb-4">
+                <textarea id="excel-question" class="w-full border border-neutral-300 dark:border-neutral-600 rounded-lg px-4 py-2 dark:bg-neutral-800 resize-none" rows="3" placeholder="Exemple : Quelles sont les tendances de vente pour le dernier trimestre ?"></textarea>
+              </div>
+              
+              <button id="excel-analyze-btn" class="btn btn-primary">
+                <i class="fas fa-chart-line mr-2"></i> Analyser les données
+              </button>
+            </div>
+            
+            <div id="excel-results" class="card hidden">
+              <h2 class="text-lg font-semibold mb-4">Résultats de l'analyse</h2>
+              <div id="excel-results-content" class="prose dark:prose-invert max-w-none">
+                <!-- Les résultats seront ajoutés ici dynamiquement -->
+              </div>
+            </div>
+          </div>
+        </div>
+        
+        <!-- Mail Agent View -->
+        <div id="mail-agent-view" class="h-full flex flex-col" style="display: none;">
+          <div class="p-6">
+            <h1 class="text-2xl font-bold mb-6">Agent Courriers</h1>
+            
+            <div class="card mb-6">
+              <h2 class="text-lg font-semibold mb-4">Génération de courriers</h2>
+              <p class="mb-4">Générez facilement des lettres, emails et autres documents de correspondance professionnelle.</p>
+              
+              <div class="mb-4">
+                <label class="block text-sm font-medium mb-2">Type de document</label>
+                <select id="mail-type" class="w-full border border-neutral-300 dark:border-neutral-600 rounded-lg px-4 py-2 dark:bg-neutral-800">
+                  <option value="letter">Lettre formelle</option>
+                  <option value="email">Email professionnel</option>
+                  <option value="complaint">Lettre de réclamation</option>
+                  <option value="cover">Lettre de motivation</option>
+                  <option value="resignation">Lettre de démission</option>
+                  <option value="custom">Document personnalisé</option>
+                </select>
+              </div>
+              
+              <div class="mb-4">
+                <label class="block text-sm font-medium mb-2">Description du contenu</label>
+                <textarea id="mail-description" class="w-full border border-neutral-300 dark:border-neutral-600 rounded-lg px-4 py-2 dark:bg-neutral-800 resize-none" rows="4" placeholder="Décrivez le contenu que vous souhaitez inclure dans votre document..."></textarea>
+              </div>
+              
+              <button id="mail-generate-btn" class="btn btn-primary">
+                <i class="fas fa-envelope mr-2"></i> Générer le document
+              </button>
+            </div>
+            
+            <div id="mail-results" class="card hidden">
+              <div class="flex justify-between items-center mb-4">
+                <h2 class="text-lg font-semibold">Document généré</h2>
+                <div>
+                  <button id="mail-copy-btn" class="btn btn-sm btn-outline mr-2">
+                    <i class="fas fa-copy mr-1"></i> Copier
+                  </button>
+                  <button id="mail-download-btn" class="btn btn-sm btn-outline">
+                    <i class="fas fa-download mr-1"></i> Télécharger
+                  </button>
+                </div>
+              </div>
+              <div id="mail-results-content" class="prose dark:prose-invert max-w-none border border-neutral-200 dark:border-neutral-700 rounded-lg p-4 bg-white dark:bg-neutral-900">
+                <!-- Le document généré sera ajouté ici dynamiquement -->
+              </div>
+            </div>
+          </div>
+        </div>
+        
+        <!-- Document Agent View -->
+        <div id="doc-agent-view" class="h-full flex flex-col" style="display: none;">
+          <div class="p-6">
+            <h1 class="text-2xl font-bold mb-6">Agent Documents</h1>
+            
+            <div class="card mb-6">
+              <h2 class="text-lg font-semibold mb-4">Analyse de documents</h2>
+              <p class="mb-4">Importez un document PDF ou texte pour l'analyser et poser des questions sur son contenu.</p>
+              
+              <div class="mb-4">
+                <label class="block text-sm font-medium mb-2">Fichier document</label>
+                <div class="flex items-center">
+                  <label class="flex-1 cursor-pointer border border-dashed border-neutral-300 dark:border-neutral-600 rounded-lg p-4 text-center hover:bg-neutral-50 dark:hover:bg-neutral-800/50">
+                    <input type="file" id="doc-file-upload" class="hidden" accept=".pdf,.docx,.doc,.txt" />
+                    <i class="fas fa-file-pdf text-xl text-red-500 mb-2"></i>
+                    <p class="text-sm">Glissez-déposez votre document ou cliquez pour parcourir</p>
+                  </label>
+                </div>
+              </div>
+              
+              <div id="doc-file-preview" class="mb-4 hidden">
+                <div class="bg-neutral-100 dark:bg-neutral-800 rounded-lg p-3 flex items-center">
+                  <i class="fas fa-file-pdf text-red-500 mr-3"></i>
+                  <div class="flex-1">
+                    <p id="doc-filename" class="text-sm font-medium">nom_du_fichier.pdf</p>
+                    <p id="doc-filesize" class="text-xs text-neutral-500 dark:text-neutral-400">1.2 MB</p>
+                  </div>
+                  <button id="doc-file-remove" class="text-neutral-500 hover:text-red-500">
+                    <i class="fas fa-times"></i>
+                  </button>
+                </div>
+              </div>
+            </div>
+            
+            <div class="card mb-6">
+              <h2 class="text-lg font-semibold mb-4">Poser une question sur le document</h2>
+              
+              <div class="mb-4">
+                <textarea id="doc-question" class="w-full border border-neutral-300 dark:border-neutral-600 rounded-lg px-4 py-2 dark:bg-neutral-800 resize-none" rows="3" placeholder="Exemple : Pouvez-vous résumer les points clés de ce document ?"></textarea>
+              </div>
+              
+              <button id="doc-analyze-btn" class="btn btn-primary">
+                <i class="fas fa-search-plus mr-2"></i> Analyser le document
+              </button>
+            </div>
+            
+            <div id="doc-results" class="card hidden">
+              <h2 class="text-lg font-semibold mb-4">Résultats de l'analyse</h2>
+              <div id="doc-results-content" class="prose dark:prose-invert max-w-none">
+                <!-- Les résultats seront ajoutés ici dynamiquement -->
+              </div>
             </div>
           </div>
         </div>
@@ -377,9 +534,10 @@
   <!-- Scripts -->
   <script src="js/navigation.js"></script>
   <script src="js/command-buttons.js"></script>
-  <script src="js/new-chat-button.js"></script>
-  <script src="js/file-uploader.js"></script>
-  <script src="js/dashboard.js"></script>
   <script src="js/app.js"></script>
+  <script src="js/dashboard.js"></script>
+  <script src="js/excel-agent.js"></script>
+  <script src="js/mail-agent.js"></script>
+  <script src="js/doc-agent.js"></script>
 </body>
 </html>

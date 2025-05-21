@@ -16,6 +16,9 @@ function navigateTo(viewName) {
   const chatView = document.getElementById('chat-view');
   const historyView = document.getElementById('history-view');
   const settingsView = document.getElementById('settings-view');
+  const excelAgentView = document.getElementById('excel-agent-view');
+  const mailAgentView = document.getElementById('mail-agent-view');
+  const docAgentView = document.getElementById('doc-agent-view');
   
   // Vérifier que la vue dashboard existe au minimum
   if (!dashboardView) {
@@ -39,6 +42,9 @@ function navigateTo(viewName) {
   if (chatView) chatView.style.display = 'none';
   if (historyView) historyView.style.display = 'none';
   if (settingsView) settingsView.style.display = 'none';
+  if (excelAgentView) excelAgentView.style.display = 'none';
+  if (mailAgentView) mailAgentView.style.display = 'none';
+  if (docAgentView) docAgentView.style.display = 'none';
   
   // Afficher la vue demandée
   switch (viewName) {
@@ -61,6 +67,10 @@ function navigateTo(viewName) {
     case 'history':
       if (historyView) {
         historyView.style.display = 'block';
+        // Mettre à jour la liste des conversations si nécessaire
+        if (typeof updateConversationList === 'function') {
+          updateConversationList();
+        }
       } else {
         console.warn("Vue historique non disponible, affichage du tableau de bord");
         dashboardView.style.display = 'block';
@@ -72,6 +82,33 @@ function navigateTo(viewName) {
         settingsView.style.display = 'block';
       } else {
         console.warn("Vue paramètres non disponible, affichage du tableau de bord");
+        dashboardView.style.display = 'block';
+      }
+      break;
+      
+    case 'excel-agent':
+      if (excelAgentView) {
+        excelAgentView.style.display = 'flex';
+      } else {
+        console.warn("Vue agent Excel non disponible, affichage du tableau de bord");
+        dashboardView.style.display = 'block';
+      }
+      break;
+      
+    case 'mail-agent':
+      if (mailAgentView) {
+        mailAgentView.style.display = 'flex';
+      } else {
+        console.warn("Vue agent Courriers non disponible, affichage du tableau de bord");
+        dashboardView.style.display = 'block';
+      }
+      break;
+      
+    case 'doc-agent':
+      if (docAgentView) {
+        docAgentView.style.display = 'flex';
+      } else {
+        console.warn("Vue agent Documents non disponible, affichage du tableau de bord");
         dashboardView.style.display = 'block';
       }
       break;
