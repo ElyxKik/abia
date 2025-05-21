@@ -71,6 +71,9 @@ async function updateDashboardData() {
     // Mise à jour de l'activité récente
     updateRecentActivity(history);
     
+    // Mise à jour des conversations récentes dans la barre latérale
+    updateRecentConversations(history);
+    
     // Mise à jour des widgets
     updateWidgets(context, activeAgent, activeFiles);
     
@@ -154,22 +157,53 @@ function updateRecentActivity(history) {
     let iconColor = 'primary';
     let activityText = 'Nouvelle conversation';
     
-    // Déterminer l'icône et le texte en fonction du type d'activité
+    // Extraire le titre de la conversation à partir du premier message utilisateur
+    if (item.conversationHistory && item.conversationHistory.length > 0) {
+      // Chercher le premier message de l'utilisateur
+      const userMessages = item.conversationHistory.filter(msg => msg.role === 'user');
+      if (userMessages && userMessages.length > 0 && userMessages[0].content) {
+        // Limiter la longueur du titre à 30 caractères
+        const content = userMessages[0].content.trim();
+        activityText = content.length > 30 
+          ? content.substring(0, 30) + '...' 
+          : content;
+      }
+    }
+    
+    // Déterminer l'icône en fonction du type d'agent
+    if (item.agent === 'excel') {
+      icon = 'file-excel';
+      iconColor = 'secondary';
+    } else if (item.agent === 'document') {
+      icon = 'file-pdf';
+      iconColor = 'red';
+    } else if (item.agent === 'mail') {
+      icon = 'envelope';
+      iconColor = 'green';
+    }
+    
+    // Déterminer l'icône et le texte en fonction du type d'activité (pour la rétrocompatibilité)
     if (item.type === 'file' || item.files && item.files.length) {
       const fileType = item.fileType || (item.files && item.files[0] ? item.files[0].type : 'document');
       
       if (fileType.includes('excel') || fileType.includes('spreadsheet')) {
         icon = 'file-excel';
         iconColor = 'secondary';
-        activityText = 'Analyse Excel complétée';
+        if (activityText === 'Nouvelle conversation') {
+          activityText = 'Analyse Excel complétée';
+        }
       } else if (fileType.includes('pdf') || fileType.includes('document')) {
         icon = 'file-pdf';
         iconColor = 'red';
-        activityText = 'Document analysé';
+        if (activityText === 'Nouvelle conversation') {
+          activityText = 'Document analysé';
+        }
       } else if (fileType.includes('mail') || fileType.includes('email')) {
         icon = 'envelope';
         iconColor = 'green';
-        activityText = 'Lettre générée';
+        if (activityText === 'Nouvelle conversation') {
+          activityText = 'Lettre générée';
+        }
       }
     }
     
@@ -529,21 +563,63 @@ function updateHistoryView(history, sessions) {
         iconColor = 'green';
       }
       
+      // Trouver le premier message de l'utilisateur pour l'utiliser comme titre
+      let conversationTitle = 'Conversation';
+      
+      // Si nous avons un historique de messages, utiliser la première question de l'utilisateur comme titre
+      if (convo.conversationHistory && convo.conversationHistory.length > 0) {
+        // Chercher le premier message de l'utilisateur
+        const userMessages = convo.conversationHistory.filter(msg => msg.role === 'user');
+        if (userMessages && userMessages.length > 0 && userMessages[0].content) {
+          // Limiter la longueur du titre à 40 caractères
+          const content = userMessages[0].content.trim();
+          conversationTitle = content.length > 40 
+            ? content.substring(0, 40) + '...' 
+            : content;
+        }
+      }
+      
       // Créer un élément pour la conversation
       const convoElement = document.createElement('div');
       convoElement.className = 'flex items-start p-3 border-b border-neutral-200 dark:border-neutral-700 hover:bg-neutral-50 dark:hover:bg-neutral-800/50 cursor-pointer';
+      convoElement.setAttribute('data-session-id', convo.sessionId || '');
       convoElement.innerHTML = `
         <div class="flex-shrink-0 h-10 w-10 rounded-full bg-${iconColor}-100 dark:bg-${iconColor}-900/30 flex items-center justify-center text-${iconColor}-600 dark:text-${iconColor}-400">
           <i class="fas fa-${icon}"></i>
         </div>
         <div class="ml-3 flex-1">
           <div class="flex justify-between">
-            <p class="text-sm font-medium">${convo.title || 'Conversation'}</p>
+            <p class="text-sm font-medium">${conversationTitle}</p>
             <p class="text-xs text-neutral-500 dark:text-neutral-400">${timeAgo}</p>
           </div>
           <p class="text-sm text-neutral-600 dark:text-neutral-300 truncate mt-1">${convo.lastMessage || 'Aucun message'}</p>
         </div>
       `;
+      
+      // Ajouter un écouteur d'événement pour charger la conversation quand on clique dessus
+      convoElement.addEventListener('click', () => {
+        const sessionId = convoElement.getAttribute('data-session-id');
+        if (!sessionId) {
+          console.error("ID de session non disponible pour cette conversation");
+          return;
+        }
+        
+        // Naviguer vers la vue de chat
+        if (window.navigation && typeof window.navigation.navigateTo === 'function') {
+          window.navigation.navigateTo('chat');
+        }
+        
+        // Charger la conversation
+        if (window.api && typeof window.api.loadContext === 'function') {
+          window.api.loadContext(sessionId)
+            .then(() => {
+              console.log(`Conversation ${sessionId} chargée avec succès`);
+            })
+            .catch(error => {
+              console.error(`Erreur lors du chargement de la conversation ${sessionId}:`, error);
+            });
+        }
+      });
       
       conversationsContainer.appendChild(convoElement);
     });
@@ -700,8 +776,100 @@ function getTimeAgo(date) {
   }
 }
 
+/**
+ * Mise à jour de la liste des conversations récentes dans la barre latérale
+ */
+function updateRecentConversations(history) {
+  const recentConversationsContainer = document.querySelector('#recent-conversations');
+  
+  if (!recentConversationsContainer) {
+    return;
+  }
+  
+  // Vider le conteneur
+  recentConversationsContainer.innerHTML = '';
+  
+  // Si aucune conversation n'est disponible, afficher un message
+  if (!history || history.length === 0) {
+    const emptyElement = document.createElement('li');
+    emptyElement.className = 'px-3 py-2 text-sm text-neutral-500 dark:text-neutral-400';
+    emptyElement.textContent = 'Aucune conversation';
+    recentConversationsContainer.appendChild(emptyElement);
+    return;
+  }
+  
+  // Prendre les 5 plus récentes conversations
+  const recentConversations = history.slice(0, 5);
+  
+  recentConversations.forEach(conversation => {
+    // Trouver le premier message de l'utilisateur pour l'utiliser comme titre
+    let conversationTitle = 'Conversation';
+    let sessionId = conversation.sessionId || '';
+    
+    // Si nous avons un historique de messages, utiliser la première question de l'utilisateur comme titre
+    if (conversation.conversationHistory && conversation.conversationHistory.length > 0) {
+      // Chercher le premier message de l'utilisateur
+      const userMessages = conversation.conversationHistory.filter(msg => msg.role === 'user');
+      if (userMessages && userMessages.length > 0 && userMessages[0].content) {
+        // Limiter la longueur du titre à 30 caractères
+        const content = userMessages[0].content.trim();
+        conversationTitle = content.length > 30 
+          ? content.substring(0, 30) + '...' 
+          : content;
+      }
+    }
+    
+    // Déterminer l'icône en fonction du type de conversation
+    let icon = 'comment-alt';
+    
+    if (conversation.agent === 'excel') {
+      icon = 'file-excel';
+    } else if (conversation.agent === 'document') {
+      icon = 'file-pdf';
+    } else if (conversation.agent === 'mail') {
+      icon = 'envelope';
+    }
+    
+    // Créer l'élément de conversation
+    const conversationElement = document.createElement('li');
+    conversationElement.innerHTML = `
+      <a href="#chat" class="sidebar-item" data-session-id="${sessionId}">
+        <i class="fas fa-${icon} mr-3"></i>
+        <span>${conversationTitle}</span>
+      </a>
+    `;
+    
+    // Ajouter un écouteur d'événement pour charger la conversation quand on clique dessus
+    const conversationLink = conversationElement.querySelector('a');
+    if (conversationLink) {
+      conversationLink.addEventListener('click', (e) => {
+        e.preventDefault();
+        
+        // Naviguer vers la vue de chat
+        if (window.navigation && typeof window.navigation.navigateTo === 'function') {
+          window.navigation.navigateTo('chat');
+        }
+        
+        // Charger la conversation si un ID de session est disponible
+        if (sessionId && window.api && typeof window.api.loadContext === 'function') {
+          window.api.loadContext(sessionId)
+            .then(() => {
+              console.log(`Conversation ${sessionId} chargée avec succès`);
+            })
+            .catch(error => {
+              console.error(`Erreur lors du chargement de la conversation ${sessionId}:`, error);
+            });
+        }
+      });
+    }
+    
+    recentConversationsContainer.appendChild(conversationElement);
+  });
+}
+
 // Exporter les fonctions pour les rendre disponibles dans d'autres modules
 window.dashboard = {
   updateDashboardData,
-  loadHistoryData
+  loadHistoryData,
+  updateRecentConversations
 };

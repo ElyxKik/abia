@@ -23,9 +23,14 @@ document.addEventListener('DOMContentLoaded', function() {
   const dashboardView = document.getElementById('dashboard-view');
   const chatView = document.getElementById('chat-view');
   
-  // Afficher directement la vue de chat au démarrage
+  // S'assurer que le tableau de bord est visible au démarrage
+  if (dashboardView) {
+    dashboardView.style.display = 'block';
+  }
+  
+  // S'assurer que la vue de chat est masquée au démarrage
   if (chatView) {
-    chatView.style.display = 'flex';
+    chatView.style.display = 'none';
   }
   
   // Récupération des liens de navigation

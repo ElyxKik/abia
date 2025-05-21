@@ -134,24 +134,49 @@ class MemoryService {
   
   /**
    * Ajoute un message à l'historique de conversation
+   * Vérifie que le message n'est pas vide ou dupliqué avant de l'ajouter
    * @param {string} role - 'user' ou 'assistant'
    * @param {string} content - Contenu du message
    * @param {Object} metadata - Métadonnées associées au message
+   * @returns {boolean} - True si le message a été ajouté, false sinon
    */
   addToConversationHistory(role, content, metadata = {}) {
+    // Vérifier que le contenu n'est pas vide
+    if (!content || content.trim() === '') {
+      console.log('Message vide, pas d\'ajout à l\'historique');
+      return false;
+    }
+    
+    // Normaliser le contenu pour éviter les espaces superflus
+    const normalizedContent = content.trim();
+    
+    // Vérifier si ce message est un doublon du dernier message avec le même rôle
+    const lastMessages = this.currentContext.conversationHistory
+      .filter(msg => msg.role === role)
+      .slice(-3); // Vérifier parmi les 3 derniers messages du même rôle
+    
+    const isDuplicate = lastMessages.some(msg => 
+      msg.content.trim() === normalizedContent
+    );
+    
+    if (isDuplicate) {
+      console.log('Message dupliqué, pas d\'ajout à l\'historique');
+      return false;
+    }
+    
     const timestamp = new Date().toISOString();
     
     this.currentContext.conversationHistory.push({
       role,
-      content,
+      content: normalizedContent,
       timestamp,
       metadata
     });
     
     if (role === 'user') {
-      this.currentContext.lastQuery = content;
+      this.currentContext.lastQuery = normalizedContent;
     } else if (role === 'assistant') {
-      this.currentContext.lastResponse = content;
+      this.currentContext.lastResponse = normalizedContent;
     }
     
     // Limiter la taille de l'historique pour éviter des problèmes de mémoire
@@ -159,7 +184,7 @@ class MemoryService {
       this.currentContext.conversationHistory = this.currentContext.conversationHistory.slice(-100);
     }
     
-    // Sauvegarder périodiquement dans la base de données
+    // Sauvegarder dans la base de données
     this._saveContextToDb();
     
     return true;
@@ -282,25 +307,44 @@ class MemoryService {
   
   /**
    * Sauvegarde le contexte actuel dans la base de données
+   * Vérifie que la conversation n'est pas vide avant de la sauvegarder
    * @private
    */
   _saveContextToDb() {
+    // Vérifier si la conversation est vide (aucun message utilisateur)
+    const hasUserMessages = this.currentContext.conversationHistory.some(msg => msg.role === 'user');
+    
+    // Ne pas sauvegarder les conversations vides
+    if (this.currentContext.conversationHistory.length === 0 || !hasUserMessages) {
+      console.log('Conversation vide, pas de sauvegarde');
+      return;
+    }
+    
     const contextToSave = {
       _id: this.currentContext.sessionId,
       ...this.currentContext,
       updatedAt: new Date().toISOString()
     };
     
-    this.db.update(
-      { _id: this.currentContext.sessionId }, 
-      contextToSave, 
-      { upsert: true },
-      (err) => {
-        if (err) {
-          console.error('Erreur lors de la sauvegarde du contexte:', err);
-        }
+    // Vérifier si cette session existe déjà pour éviter les doublons
+    this.db.findOne({ _id: this.currentContext.sessionId }, (err, existingDoc) => {
+      if (err) {
+        console.error('Erreur lors de la vérification de l\'existence de la session:', err);
+        return;
       }
-    );
+      
+      // Mettre à jour ou insérer selon le cas
+      this.db.update(
+        { _id: this.currentContext.sessionId }, 
+        contextToSave, 
+        { upsert: true },
+        (updateErr) => {
+          if (updateErr) {
+            console.error('Erreur lors de la sauvegarde du contexte:', updateErr);
+          }
+        }
+      );
+    });
   }
   
   /**
@@ -347,6 +391,65 @@ class MemoryService {
             }));
             
             resolve(sessions);
+          }
+        });
+    });
+  }
+  
+  /**
+   * Récupère toutes les conversations disponibles
+   * Filtre les conversations vides et élimine les doublons
+   * @param {number} limit - Nombre maximum de conversations à récupérer
+   * @returns {Promise<Array>} Liste des conversations
+   */
+  getAllConversations(limit = 10) {
+    return new Promise((resolve, reject) => {
+      this.db.find({})
+        .sort({ updatedAt: -1 })
+        .exec((err, docs) => {
+          if (err) {
+            reject(err);
+          } else {
+            // Ensemble pour suivre les conversations déjà traitées (pour éviter les doublons)
+            const processedConversations = new Set();
+            
+            // Filtrer les sessions qui ont au moins un message utilisateur et ne sont pas des doublons
+            const conversations = docs
+              .filter(doc => {
+                // Vérifier si la session a au moins un message utilisateur
+                const hasUserMessages = doc.conversationHistory && 
+                       doc.conversationHistory.length > 0 &&
+                       doc.conversationHistory.some(msg => msg.role === 'user');
+                
+                if (!hasUserMessages) {
+                  return false;
+                }
+                
+                // Générer une clé unique pour cette conversation basée sur son contenu
+                const userMessages = doc.conversationHistory
+                  .filter(msg => msg.role === 'user')
+                  .map(msg => msg.content.trim())
+                  .join('|');
+                  
+                // Vérifier si nous avons déjà une conversation avec le même contenu
+                if (processedConversations.has(userMessages)) {
+                  return false;
+                }
+                
+                // Ajouter cette conversation à l'ensemble des conversations traitées
+                processedConversations.add(userMessages);
+                return true;
+              })
+              .map(doc => ({
+                sessionId: doc._id,
+                timestamp: doc.updatedAt || doc.createdAt,
+                agent: doc.activeAgent ? doc.activeAgent.name : 'chat',
+                conversationHistory: doc.conversationHistory,
+                lastMessage: doc.lastResponse || ''
+              }))
+              .slice(0, limit); // Limiter le nombre de conversations après filtrage
+            
+            resolve(conversations);
           }
         });
     });

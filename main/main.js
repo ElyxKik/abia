@@ -513,7 +513,7 @@ ipcMain.handle('get-conversation-history', async (event, limit) => {
     if (!memoryService) {
       throw new Error('Le service de mémoire n\'est pas initialisé');
     }
-    return memoryService.getConversationHistory(limit);
+    return memoryService.getAllConversations(limit);
   } catch (error) {
     console.error('Erreur lors de la récupération de l\'historique de conversation:', error);
     throw error;
