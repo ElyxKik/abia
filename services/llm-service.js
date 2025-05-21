@@ -23,6 +23,18 @@ class LLMService {
     // État de connexion
     this.connectionStatus = 'unknown'; // unknown, connected, error
     this.lastConnectionError = null;
+    
+    // Statistiques d'utilisation des tokens
+    this.tokenStats = {
+      today: 0,
+      month: 0,
+      total: 0,
+      lastCall: null,
+      model: this.model
+    };
+    
+    // Charger les statistiques précédentes si disponibles
+    this._loadTokenStats();
   }
 
   /**
@@ -124,9 +136,45 @@ class LLMService {
         this.connectionStatus = 'connected';
         this.lastConnectionError = null;
         
-        // Mettre en cache la réponse si ce n'est pas une requête en streaming
+        // Estimer et suivre l'utilisation des tokens
+        if (!options.stream) {
+          // Estimer les tokens d'entrée
+          const inputTokens = this._estimateMessagesTokenCount(messages);
+          
+          // Estimer les tokens de sortie (réponse)
+          let outputTokens = 0;
+          if (response.data && response.data.choices && response.data.choices[0] && response.data.choices[0].message) {
+            outputTokens = this._estimateTokenCount(response.data.choices[0].message.content || '');
+          }
+          
+          // Utiliser les tokens réels si disponibles dans la réponse de l'API
+          if (response.data && response.data.usage) {
+            const usage = response.data.usage;
+            this._updateTokenStats(
+              usage.prompt_tokens || inputTokens,
+              usage.completion_tokens || outputTokens
+            );
+          } else {
+            // Sinon, utiliser notre estimation
+            this._updateTokenStats(inputTokens, outputTokens);
+          }
+        }
+        
+        // Si ce n'est pas un flux, mettre en cache la réponse
         if (!options.stream && !options.skipCache) {
-          this._cacheResponse(this._createCacheKey(messages, options), response.data);
+          // Limiter la taille du cache
+          if (this.responseCache.size >= this.cacheMaxSize) {
+            // Supprimer l'entrée la plus ancienne
+            const oldestKey = this.responseCache.keys().next().value;
+            this.responseCache.delete(oldestKey);
+          }
+          
+          // Ajouter la réponse au cache
+          const cacheKey = this._createCacheKey(messages, options);
+          this.responseCache.set(cacheKey, {
+            response: response.data,
+            timestamp: Date.now()
+          });
         }
         
         return response.data;
@@ -444,6 +492,130 @@ ${text}`;
         status: this.lastConnectionError.response?.status
       } : null
     };
+  }
+  
+  /**
+   * Charge les statistiques d'utilisation des tokens
+   * @private
+   */
+  _loadTokenStats() {
+    try {
+      const statsPath = path.join(process.cwd(), 'data', 'token_stats.json');
+      
+      if (fs.existsSync(statsPath)) {
+        const statsData = fs.readFileSync(statsPath, 'utf8');
+        const stats = JSON.parse(statsData);
+        
+        // Vérifier si les statistiques sont du jour actuel
+        const today = new Date().toISOString().split('T')[0]; // Format YYYY-MM-DD
+        const lastDate = stats.lastCall ? new Date(stats.lastCall).toISOString().split('T')[0] : null;
+        
+        // Si les statistiques ne sont pas du jour actuel, réinitialiser le compteur quotidien
+        if (lastDate !== today) {
+          stats.today = 0;
+        }
+        
+        // Vérifier si les statistiques sont du mois actuel
+        const currentMonth = new Date().toISOString().slice(0, 7); // Format YYYY-MM
+        const lastMonth = stats.lastCall ? new Date(stats.lastCall).toISOString().slice(0, 7) : null;
+        
+        // Si les statistiques ne sont pas du mois actuel, réinitialiser le compteur mensuel
+        if (lastMonth !== currentMonth) {
+          stats.month = 0;
+        }
+        
+        this.tokenStats = { ...this.tokenStats, ...stats };
+        console.log('Statistiques de tokens chargées:', this.tokenStats);
+      }
+    } catch (error) {
+      console.error('Erreur lors du chargement des statistiques de tokens:', error);
+    }
+  }
+  
+  /**
+   * Sauvegarde les statistiques d'utilisation des tokens
+   * @private
+   */
+  _saveTokenStats() {
+    try {
+      const dataDir = path.join(process.cwd(), 'data');
+      const statsPath = path.join(dataDir, 'token_stats.json');
+      
+      // Créer le répertoire data s'il n'existe pas
+      if (!fs.existsSync(dataDir)) {
+        fs.mkdirSync(dataDir, { recursive: true });
+      }
+      
+      fs.writeFileSync(statsPath, JSON.stringify(this.tokenStats, null, 2), 'utf8');
+    } catch (error) {
+      console.error('Erreur lors de la sauvegarde des statistiques de tokens:', error);
+    }
+  }
+  
+  /**
+   * Met à jour les statistiques d'utilisation des tokens
+   * @param {number} inputTokens - Nombre de tokens en entrée
+   * @param {number} outputTokens - Nombre de tokens en sortie
+   * @private
+   */
+  _updateTokenStats(inputTokens, outputTokens) {
+    const totalTokens = inputTokens + outputTokens;
+    
+    // Mettre à jour les compteurs
+    this.tokenStats.today += totalTokens;
+    this.tokenStats.month += totalTokens;
+    this.tokenStats.total += totalTokens;
+    this.tokenStats.lastCall = new Date().toISOString();
+    this.tokenStats.model = this.model;
+    
+    // Sauvegarder les statistiques
+    this._saveTokenStats();
+  }
+  
+  /**
+   * Estime le nombre de tokens dans un message
+   * Méthode simplifiée basée sur le nombre de mots (approximatif)
+   * @param {string} text - Texte à analyser
+   * @returns {number} - Estimation du nombre de tokens
+   * @private
+   */
+  _estimateTokenCount(text) {
+    if (!text) return 0;
+    
+    // Approximation simple: 1 token ≈ 0.75 mots
+    const words = text.trim().split(/\s+/).length;
+    return Math.ceil(words / 0.75);
+  }
+  
+  /**
+   * Estime le nombre de tokens dans un tableau de messages
+   * @param {Array} messages - Messages à analyser
+   * @returns {number} - Estimation du nombre de tokens
+   * @private
+   */
+  _estimateMessagesTokenCount(messages) {
+    if (!messages || !Array.isArray(messages)) return 0;
+    
+    let totalTokens = 0;
+    
+    for (const message of messages) {
+      if (message.content) {
+        totalTokens += this._estimateTokenCount(message.content);
+      }
+    }
+    
+    // Ajouter des tokens supplémentaires pour les métadonnées (rôles, etc.)
+    totalTokens += messages.length * 4;
+    
+    return totalTokens;
+  }
+  
+  /**
+   * Récupère les statistiques d'utilisation des tokens
+   * @returns {Object} - Statistiques d'utilisation
+   */
+  getTokenStats() {
+    return { ...this.tokenStats };
   }
 }
 

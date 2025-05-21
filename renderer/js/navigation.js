@@ -14,11 +14,12 @@ function navigateTo(viewName) {
   // Récupération des vues
   const dashboardView = document.getElementById('dashboard-view');
   const chatView = document.getElementById('chat-view');
+  const historyView = document.getElementById('history-view');
   const settingsView = document.getElementById('settings-view');
   
-  // Vérifier que les vues existent
-  if (!dashboardView || !chatView) {
-    console.error("Impossible de naviguer: vues non trouvées");
+  // Vérifier que la vue dashboard existe au minimum
+  if (!dashboardView) {
+    console.error("Impossible de naviguer: vue dashboard non trouvée");
     return;
   }
   
@@ -33,31 +34,51 @@ function navigateTo(viewName) {
     }
   });
   
-  // Masquer toutes les vues - utiliser les classes pour la cohérence
-  dashboardView.classList.add('hidden');
-  chatView.style.display = 'none';
+  // Masquer toutes les vues existantes
+  dashboardView.style.display = 'none';
+  if (chatView) chatView.style.display = 'none';
+  if (historyView) historyView.style.display = 'none';
   if (settingsView) settingsView.style.display = 'none';
   
   // Afficher la vue demandée
   switch (viewName) {
     case 'dashboard':
-      dashboardView.classList.remove('hidden');
+      dashboardView.style.display = 'block';
       break;
       
     case 'chat':
-      chatView.style.display = 'flex';
-      // Donner le focus au champ de saisie
-      const chatInput = document.getElementById('chat-input');
-      if (chatInput) chatInput.focus();
+      if (chatView) {
+        chatView.style.display = 'flex';
+        // Donner le focus au champ de saisie
+        const chatInput = document.getElementById('chat-input');
+        if (chatInput) chatInput.focus();
+      } else {
+        console.warn("Vue chat non disponible, affichage du tableau de bord");
+        dashboardView.style.display = 'block';
+      }
+      break;
+    
+    case 'history':
+      if (historyView) {
+        historyView.style.display = 'block';
+      } else {
+        console.warn("Vue historique non disponible, affichage du tableau de bord");
+        dashboardView.style.display = 'block';
+      }
       break;
       
     case 'settings':
-      if (settingsView) settingsView.style.display = 'block';
+      if (settingsView) {
+        settingsView.style.display = 'block';
+      } else {
+        console.warn("Vue paramètres non disponible, affichage du tableau de bord");
+        dashboardView.style.display = 'block';
+      }
       break;
       
     default:
       // Par défaut, afficher le tableau de bord
-      dashboardView.classList.remove('hidden');
+      dashboardView.style.display = 'block';
   }
 }
 

@@ -199,6 +199,9 @@ function updateWidgets(context, activeAgent, activeFiles) {
   
   // Mise à jour du widget "Ressources"
   updateResourcesWidget(activeFiles);
+  
+  // Mise à jour du widget "Usage"
+  updateUsageWidget(context);
 }
 
 /**
@@ -314,6 +317,101 @@ function updateResourcesWidget(activeFiles) {
       
       resourcesContainer.appendChild(fileElement);
     });
+  }
+}
+
+/**
+ * Mise à jour du widget Usage (consommation de tokens)
+ */
+function updateUsageWidget(context) {
+  const usageContainer = document.querySelector('#usage-widget');
+  
+  if (!usageContainer) {
+    return;
+  }
+  
+  // Récupérer les éléments du DOM pour les statistiques d'usage
+  const todayCountElement = usageContainer.querySelector('#tokens-today-count');
+  const todayProgressElement = usageContainer.querySelector('#tokens-today-progress');
+  const monthCountElement = usageContainer.querySelector('#tokens-month-count');
+  const monthProgressElement = usageContainer.querySelector('#tokens-month-progress');
+  const costElement = usageContainer.querySelector('#tokens-cost');
+  const modelElement = usageContainer.querySelector('#current-model');
+  const lastCallElement = usageContainer.querySelector('#last-api-call');
+  
+  // Vérifier que les éléments existent
+  if (!todayCountElement || !todayProgressElement || !monthCountElement || !monthProgressElement || !costElement || !modelElement || !lastCallElement) {
+    console.error('Certains éléments du widget Usage sont manquants');
+    return;
+  }
+  
+  // Récupérer les statistiques d'usage depuis le contexte ou via l'API
+  let tokenStats = {
+    today: 0,
+    month: 0,
+    total: 0,
+    lastCall: null,
+    model: 'DeepSeek'
+  };
+  
+  // Si nous avons des statistiques dans le contexte, les utiliser
+  if (context && context.tokenStats) {
+    tokenStats = { ...tokenStats, ...context.tokenStats };
+  }
+  
+  // Sinon, essayer de les récupérer via l'API
+  else if (window.api && typeof window.api.getTokenStats === 'function') {
+    window.api.getTokenStats()
+      .then(stats => {
+        if (stats) {
+          tokenStats = { ...tokenStats, ...stats };
+          updateUsageDisplay();
+        }
+      })
+      .catch(error => {
+        console.error('Erreur lors de la récupération des statistiques de tokens:', error);
+      });
+  }
+  
+  // Mettre à jour l'affichage avec les données disponibles
+  updateUsageDisplay();
+  
+  function updateUsageDisplay() {
+    // Mettre à jour les compteurs de tokens
+    todayCountElement.textContent = formatNumber(tokenStats.today);
+    monthCountElement.textContent = formatNumber(tokenStats.month);
+    
+    // Calculer les pourcentages pour les barres de progression
+    // Supposons qu'une utilisation quotidienne "normale" est de 10 000 tokens
+    const dailyLimit = 10000;
+    const monthlyLimit = 300000; // ~10 000 * 30 jours
+    
+    const todayProgress = Math.min(Math.round((tokenStats.today / dailyLimit) * 100), 100);
+    const monthProgress = Math.min(Math.round((tokenStats.month / monthlyLimit) * 100), 100);
+    
+    todayProgressElement.style.width = `${todayProgress}%`;
+    monthProgressElement.style.width = `${monthProgress}%`;
+    
+    // Calculer le coût estimé (prix approximatif pour DeepSeek: 0.001$ par 1000 tokens)
+    const tokenPrice = 0.001; // $ par 1000 tokens
+    const estimatedCost = (tokenStats.month / 1000) * tokenPrice;
+    costElement.textContent = `${estimatedCost.toFixed(2)} $`;
+    
+    // Mettre à jour le modèle
+    modelElement.textContent = tokenStats.model || 'DeepSeek';
+    
+    // Mettre à jour la date du dernier appel
+    if (tokenStats.lastCall) {
+      const lastCallDate = new Date(tokenStats.lastCall);
+      lastCallElement.textContent = getTimeAgo(lastCallDate);
+    } else {
+      lastCallElement.textContent = 'Jamais';
+    }
+  }
+  
+  // Fonction utilitaire pour formater les nombres
+  function formatNumber(num) {
+    return new Intl.NumberFormat('fr-FR').format(num);
   }
 }
 

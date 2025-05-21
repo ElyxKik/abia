@@ -520,6 +520,37 @@ ipcMain.handle('get-conversation-history', async (event, limit) => {
   }
 });
 
+// Gestionnaire pour récupérer les statistiques d'utilisation des tokens
+ipcMain.handle('get-token-stats', async () => {
+  try {
+    // Essayer d'initialiser les services si ce n'est pas déjà fait
+    if (!servicesInitialized) {
+      const initialized = initializeServices();
+      if (!initialized) {
+        throw new Error('Impossible d\'initialiser les services');
+      }
+    }
+    
+    // Vérifier que le service LLM est disponible
+    if (!llmService) {
+      throw new Error('Le service LLM n\'est pas initialisé');
+    }
+    
+    // Récupérer les statistiques d'utilisation des tokens
+    return llmService.getTokenStats();
+  } catch (error) {
+    console.error('Erreur lors de la récupération des statistiques de tokens:', error);
+    // Retourner des statistiques par défaut en cas d'erreur
+    return {
+      today: 0,
+      month: 0,
+      total: 0,
+      lastCall: null,
+      model: 'DeepSeek'
+    };
+  }
+});
+
 // Fonction pour ouvrir un dossier dans l'explorateur de fichiers
 ipcMain.handle('open-folder', async (event, folderPath) => {
   try {

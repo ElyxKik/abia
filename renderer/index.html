@@ -185,7 +185,43 @@
               </ul>
             </div>
             
-
+            <!-- Usage - Statistiques de consommation de tokens -->
+            <div id="usage-widget" class="card">
+              <div class="flex justify-between items-start mb-4">
+                <h3 class="text-lg font-semibold">Consommation de Tokens</h3>
+                <i class="fas fa-chart-line text-xl text-blue-500"></i>
+              </div>
+              <div class="space-y-4">
+                <div>
+                  <div class="flex justify-between mb-1">
+                    <span class="text-sm font-medium">Tokens utilisés aujourd'hui</span>
+                    <span id="tokens-today-count" class="text-sm font-medium">0</span>
+                  </div>
+                  <div class="w-full bg-neutral-200 dark:bg-neutral-700 rounded-full h-2">
+                    <div id="tokens-today-progress" class="bg-blue-600 h-2 rounded-full" style="width: 0%"></div>
+                  </div>
+                </div>
+                <div>
+                  <div class="flex justify-between mb-1">
+                    <span class="text-sm font-medium">Tokens ce mois</span>
+                    <span id="tokens-month-count" class="text-sm font-medium">0</span>
+                  </div>
+                  <div class="w-full bg-neutral-200 dark:bg-neutral-700 rounded-full h-2">
+                    <div id="tokens-month-progress" class="bg-blue-600 h-2 rounded-full" style="width: 0%"></div>
+                  </div>
+                </div>
+                <div>
+                  <div class="flex justify-between mb-1">
+                    <span class="text-sm font-medium">Coût estimé ($)</span>
+                    <span id="tokens-cost" class="text-sm font-medium">0.00 $</span>
+                  </div>
+                </div>
+              </div>
+              <div class="mt-3 text-xs text-neutral-500 dark:text-neutral-400">
+                <p>Modèle actuel: <span id="current-model">DeepSeek</span></p>
+                <p>Dernier appel: <span id="last-api-call">Jamais</span></p>
+              </div>
+            </div>
           </div>
           
           <!-- Widgets -->
