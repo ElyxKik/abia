@@ -1,0 +1,73 @@
+{
+  "name": "abia",
+  "version": "1.0.0",
+  "description": "Assistant intelligent multiplateforme basé sur l'IA",
+  "main": "main/main.js",
+  "scripts": {
+    "start": "electron .",
+    "dev": "concurrently \"npm run watch:tailwind\" \"electron .\"",
+    "watch:tailwind": "tailwindcss -i ./renderer/css/input.css -o ./renderer/css/output.css --watch",
+    "build:tailwind": "tailwindcss -i ./renderer/css/input.css -o ./renderer/css/output.css",
+    "build": "npm run build:tailwind && electron-builder",
+    "postinstall": "electron-builder install-app-deps",
+    "package": "npm run build:tailwind && electron-builder --dir && node scripts/package-python.js"
+  },
+  "keywords": [
+    "electron",
+    "desktop",
+    "ia",
+    "assistant",
+    "llm"
+  ],
+  "author": "",
+  "license": "MIT",
+  "devDependencies": {
+    "concurrently": "^8.2.2",
+    "electron": "^28.1.0",
+    "electron-builder": "^24.9.1",
+    "tailwindcss": "^3.3.5"
+  },
+  "dependencies": {
+    "axios": "^1.6.2",
+    "better-sqlite3": "^9.2.2",
+    "docx": "^8.2.3",
+    "electron-store": "^8.1.0",
+    "electron-updater": "^6.1.7",
+    "exceljs": "^4.4.0",
+    "langchain": "^0.0.200",
+    "marked": "^9.1.5",
+    "nedb": "^1.8.0",
+    "pdf-lib": "^1.17.1",
+    "python-shell": "^5.0.0",
+    "xlsx-populate": "^1.21.0"
+  },
+  "build": {
+    "appId": "com.abia.app",
+    "productName": "ABIA",
+    "mac": {
+      "category": "public.app-category.productivity"
+    },
+    "win": {
+      "target": "nsis"
+    },
+    "linux": {
+      "target": "AppImage"
+    },
+    "extraResources": [
+      {
+        "from": "python",
+        "to": "python",
+        "filter": [
+          "**/*"
+        ]
+      },
+      {
+        "from": "python-runtime",
+        "to": "python-runtime",
+        "filter": [
+          "**/*"
+        ]
+      }
+    ]
+  }
+}

@@ -1,0 +1,792 @@
+const fs = require('fs');
+const path = require('path');
+const { PDFDocument } = require('pdf-lib');
+const XlsxPopulate = require('xlsx-populate');
+const docx = require('docx');
+const { spawn } = require('child_process');
+const { PythonShell } = require('python-shell');
+
+// Gestion sécurisée de l'import d'Electron
+let electronApp = null;
+try {
+  const electron = require('electron');
+  electronApp = electron.app || (electron.remote && electron.remote.app);
+} catch (error) {
+  console.warn('Electron n\'est pas disponible dans le service de document');
+}
+
+class DocumentService {
+  constructor() {
+    this.supportedFormats = {
+      excel: ['.xlsx', '.xls', '.csv'],
+      word: ['.docx', '.doc'],
+      pdf: ['.pdf'],
+      text: ['.txt', '.md']
+    };
+    this.initialized = false;
+  }
+  
+  /**
+   * Initialise le service de document
+   * @returns {boolean} - True si l'initialisation a réussi
+   */
+  initialize() {
+    try {
+      console.log('Initialisation du service de document...');
+      
+      // Vérifier les chemins des scripts Python
+      let pythonScriptsPath;
+      
+      if (electronApp) {
+        const appPath = electronApp.getAppPath();
+        pythonScriptsPath = path.join(appPath, 'python');
+      } else {
+        // Fallback pour les environnements non-Electron
+        pythonScriptsPath = path.join(process.cwd(), 'python');
+      }
+      
+      // Vérifier que le répertoire des scripts Python existe
+      if (!fs.existsSync(pythonScriptsPath)) {
+        console.warn(`Le répertoire des scripts Python n'existe pas: ${pythonScriptsPath}`);
+        fs.mkdirSync(pythonScriptsPath, { recursive: true });
+      }
+      
+      this.pythonScriptsPath = pythonScriptsPath;
+      this.initialized = true;
+      console.log('Service de document initialisé avec succès');
+      return true;
+    } catch (error) {
+      console.error('Erreur lors de l\'initialisation du service de document:', error);
+      return false;
+    }
+  }
+
+  /**
+   * Détermine le type de document en fonction de son extension
+   * @param {string} filePath - Chemin du fichier
+   * @returns {string|null} - Type de document ou null si non supporté
+   */
+  getDocumentType(filePath) {
+    const ext = path.extname(filePath).toLowerCase();
+    
+    for (const [type, extensions] of Object.entries(this.supportedFormats)) {
+      if (extensions.includes(ext)) {
+        return type;
+      }
+    }
+    
+    return null;
+  }
+
+  /**
+   * Vérifie si le fichier est supporté
+   * @param {string} filePath - Chemin du fichier
+   * @returns {boolean} - True si le fichier est supporté
+   */
+  isSupported(filePath) {
+    return this.getDocumentType(filePath) !== null;
+  }
+
+  /**
+   * Lit le contenu d'un fichier Excel
+   * @param {string} filePath - Chemin du fichier Excel
+   * @returns {Promise<Object>} - Données du fichier Excel
+   */
+  async readExcel(filePath) {
+    try {
+      const workbook = await XlsxPopulate.fromFileAsync(filePath);
+      const result = {
+        sheets: {},
+        metadata: {
+          fileName: path.basename(filePath),
+          sheetCount: workbook.sheets().length,
+          author: workbook.property('creator') || 'Unknown'
+        }
+      };
+      
+      // Parcourir toutes les feuilles
+      workbook.sheets().forEach(sheet => {
+        const sheetName = sheet.name();
+        const usedRange = sheet.usedRange();
+        
+        if (usedRange) {
+          const values = usedRange.value();
+          result.sheets[sheetName] = values;
+        } else {
+          result.sheets[sheetName] = [];
+        }
+      });
+      
+      return result;
+    } catch (error) {
+      console.error('Erreur lors de la lecture du fichier Excel:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Analyse un fichier Excel pour extraire des statistiques et informations
+   * @param {string} filePath - Chemin du fichier Excel
+   * @returns {Promise<Object>} - Analyse du fichier Excel
+   */
+  async analyzeExcel(filePath) {
+    try {
+      // Déterminer le chemin du script Python
+      const isPackaged = app && app.isPackaged;
+      const pythonScriptDir = isPackaged
+        ? path.join(process.resourcesPath, 'python')
+        : path.join(__dirname, '..', 'python');
+      
+      const pythonScript = path.join(pythonScriptDir, 'excel_analyzer.py');
+      
+      // Vérifier si le script Python existe
+      if (!fs.existsSync(pythonScript)) {
+        console.error(`Le script Python ${pythonScript} n'existe pas.`);
+        // Utiliser l'analyse JavaScript comme solution de secours
+        return this._analyzeExcelWithJS(filePath);
+      }
+      
+      // Configurer les options pour PythonShell
+      const options = {
+        mode: 'json',
+        pythonPath: isPackaged ? path.join(process.resourcesPath, 'python', 'python') : 'python',
+        pythonOptions: ['-u'], // unbuffered output
+        scriptPath: pythonScriptDir,
+        args: [filePath]
+      };
+      
+      // Exécuter le script Python d'analyse Excel
+      return new Promise((resolve, reject) => {
+        PythonShell.run('excel_analyzer.py', options, (err, results) => {
+          if (err) {
+            console.error('Erreur lors de l\'exécution du script Python:', err);
+            // Utiliser l'analyse JavaScript comme solution de secours
+            this._analyzeExcelWithJS(filePath).then(resolve).catch(reject);
+            return;
+          }
+          
+          if (!results || results.length === 0) {
+            reject(new Error('Aucun résultat retourné par le script Python.'));
+            return;
+          }
+          
+          const result = results[0];
+          
+          if (result.error) {
+            console.error('Erreur retournée par le script Python:', result.error);
+            // Utiliser l'analyse JavaScript comme solution de secours
+            this._analyzeExcelWithJS(filePath).then(resolve).catch(reject);
+            return;
+          }
+          
+          // Convertir le résultat Python au format attendu par l'application
+          const analysis = {
+            summary: {
+              sheetCount: result.metadata.sheet_count,
+              totalRows: result.analysis.summary.total_rows,
+              totalColumns: result.analysis.summary.total_columns,
+              numericColumns: result.analysis.summary.numeric_columns || {},
+              textColumns: result.analysis.summary.categorical_columns || {},
+              dateColumns: result.analysis.summary.date_columns || {}
+            },
+            sheets: {}
+          };
+          
+          // Convertir les données des feuilles
+          for (const [sheetName, sheetData] of Object.entries(result.analysis.sheets)) {
+            analysis.sheets[sheetName] = {
+              rowCount: sheetData.row_count,
+              columnCount: sheetData.column_count,
+              columns: {}
+            };
+            
+            // Convertir les données des colonnes
+            for (const [colName, colData] of Object.entries(sheetData.columns)) {
+              analysis.sheets[sheetName].columns[colName] = {
+                index: colData.index || 0,
+                dataType: colData.type.includes('float') || colData.type.includes('int') ? 'numeric' : 
+                          colData.type.includes('datetime') ? 'date' : 'text',
+                nonNullCount: colData.non_null_count,
+                nullCount: colData.null_count,
+                uniqueCount: colData.unique_count
+              };
+              
+              // Ajouter des statistiques spécifiques selon le type de données
+              if (colData.min !== undefined) {
+                analysis.sheets[sheetName].columns[colName].min = colData.min;
+                analysis.sheets[sheetName].columns[colName].max = colData.max;
+                analysis.sheets[sheetName].columns[colName].average = colData.mean;
+                analysis.sheets[sheetName].columns[colName].median = colData.median;
+              }
+            }
+          }
+          
+          resolve(analysis);
+        });
+      });
+    } catch (error) {
+      console.error('Erreur lors de l\'analyse du fichier Excel:', error);
+      // Utiliser l'analyse JavaScript comme solution de secours
+      return this._analyzeExcelWithJS(filePath);
+    }
+  }
+  
+
+          // Ajouter des statistiques pour les colonnes numériques
+          if (types.primaryType === 'numeric') {
+            const numericValues = columnData.filter(val => typeof val === 'number');
+
+            if (numericValues.length > 0) {
+              sheetAnalysis.columns[header].min = Math.min(...numericValues);
+              sheetAnalysis.columns[header].max = Math.max(...numericValues);
+              sheetAnalysis.columns[header].sum = numericValues.reduce((a, b) => a + b, 0);
+              sheetAnalysis.columns[header].average = sheetAnalysis.columns[header].sum / numericValues.length;
+            }
+
+            analysis.summary.numericColumns[header] = sheetName;
+          } else if (types.primaryType === 'text') {
+            analysis.summary.textColumns[header] = sheetName;
+          } else if (types.primaryType === 'date') {
+            analysis.summary.dateColumns[header] = sheetName;
+          }
+        }
+      }
+
+      analysis.sheets[sheetName] = sheetAnalysis;
+    }
+
+    return analysis;
+  } catch (error) {
+    console.error('Erreur lors de l\'analyse du fichier Excel:', error);
+    throw error;
+  }
+}
+
+/**
+ * Extrait le texte d'un fichier PDF
+ * @param {string} filePath - Chemin du fichier PDF
+ * @returns {Promise<string>} - Texte extrait du PDF
+ */
+async extractTextFromPDF(filePath) {
+  try {
+    if (!fs.existsSync(filePath)) {
+      throw new Error(`Le fichier ${filePath} n'existe pas.`);
+    }
+
+    // Utiliser Python pour l'extraction de texte PDF
+    // car c'est plus efficace avec les PDF complexes
+    const isPackaged = electronApp && electronApp.isPackaged;
+    const pythonScriptPath = isPackaged ? path.join(process.resourcesPath, 'python', 'pdf_text_extractor.py') : path.join(__dirname, '../python', 'pdf_text_extractor.py');
+    const pythonPath = isPackaged ? path.join(process.resourcesPath, 'python-runtime', process.platform === 'win32' ? 'Scripts/python.exe' : 'bin/python') : null;
+
+    return new Promise((resolve, reject) => {
+      // Déterminer les chemins en fonction de si l'application est packagée ou non
+      const pythonScript = isPackaged
+        ? path.join(process.resourcesPath, 'python', 'pdf_text_extractor.py')
+        : path.join(__dirname, '../python/pdf_text_extractor.py');
+
+      // Vérifier si le script Python existe
+      if (!fs.existsSync(pythonScript)) {
+        // Créer le script Python s'il n'existe pas
+        this._createPythonPDFExtractor();
+      }
+
+      // Options pour PythonShell
+      const options = {
+        mode: 'text',
+        pythonPath: pythonPath,
+        args: [filePath]
+      };
+
+      // Exécuter le script Python
+      PythonShell.run(pythonScript, options, (err, results) => {
+        if (err) {
+          reject(new Error(`Erreur lors de l'extraction du texte: ${err.message}`));
+        } else {
+          resolve(results ? results.join('\n') : '');
+        }
+      });
+    });
+  } catch (error) {
+    console.error('Erreur lors de l\'extraction du texte:', error);
+    throw error;
+  }
+}
+
+/**
+ * Configure l'environnement pour l'exécution du script Python
+ * @returns {Object} - Options pour PythonShell
+ */
+_setupPythonEnvironment() {
+  if (!this.initialized) {
+    this.initialize();
+  }
+  const isPackaged = electronApp && electronApp.isPackaged;
+  const pythonPath = isPackaged ? path.join(process.resourcesPath, 'python-runtime') : path.join(__dirname, '../python-runtime');
+
+  // Configuration pour PythonShell
+  const options = {
+    mode: 'text',
+    pythonPath: pythonPath
+  };
+
+  return options;
+}
+
+/**
+ * Exécute un script Python pour l'analyse de documents
+ * @param {string} scriptName - Nom du script Python
+ * @param {Array} args - Arguments pour le script
+ * @returns {Promise<string>} - Sortie du script
+ */
+async _runPythonScript(scriptName, args) {
+  if (!this.initialized) {
+    this.initialize();
+  }
+  const isPackaged = electronApp && electronApp.isPackaged;
+  const pythonScriptPath = isPackaged ? path.join(process.resourcesPath, 'python', scriptName) : path.join(__dirname, '../python', scriptName);
+
+  return new Promise((resolve, reject) => {
+    // Vérifier si le script Python existe
+    if (!fs.existsSync(pythonScriptPath)) {
+      // Créer le script Python s'il n'existe pas
+      this._createPythonScript(scriptName);
+    }
+
+    // Options pour PythonShell
+    const options = this._setupPythonEnvironment();
+    options.args = args;
+
+    // Exécuter le script Python
+    PythonShell.run(pythonScriptPath, options, (err, results) => {
+      if (err) {
+        reject(new Error(`Erreur lors de l'exécution du script Python: ${err.message}`));
+      } else {
+        resolve(results ? results.join('\n') : '');
+      }
+    });
+  });
+}
+
+/**
+ * Crée un script Python pour extraire le texte des PDF
+ */
+_createPythonPDFExtractor() {
+  // Déterminer les chemins en fonction de si l'application est packagée ou non
+  const isPackaged = electronApp && electronApp.isPackaged;
+  const scriptDir = isPackaged
+    ? path.join(process.resourcesPath, 'python')
+    : path.join(__dirname, '../python');
+
+  // Créer le répertoire s'il n'existe pas
+  if (!fs.existsSync(scriptDir)) {
+    fs.mkdirSync(scriptDir, { recursive: true });
+  }
+
+  const scriptPath = path.join(scriptDir, 'pdf_text_extractor.py');
+
+  const scriptContent = `
+import sys
+import os
+import PyPDF2
+
+def extract_text_from_pdf(pdf_path):
+    """Extract text from a PDF file."""
+    if not os.path.exists(pdf_path):
+        print(f"Error: File {pdf_path} does not exist.", file=sys.stderr)
+        sys.exit(1)
+    
+    try:
+        with open(pdf_path, 'rb') as file:
+            reader = PyPDF2.PdfReader(file)
+            text = ""
+            
+            for page_num in range(len(reader.pages)):
+                page = reader.pages[page_num]
+                text += page.extract_text() + "\\n\\n"
+            
+            return text
+    except Exception as e:
+        print(f"Error: {str(e)}", file=sys.stderr)
+        sys.exit(1)
+
+if __name__ == "__main__":
+    if len(sys.argv) != 2:
+        print("Usage: python pdf_text_extractor.py <pdf_file_path>", file=sys.stderr)
+        sys.exit(1)
+    
+    pdf_path = sys.argv[1]
+    text = extract_text_from_pdf(pdf_path)
+    print(text)
+`;
+    
+    fs.writeFileSync(scriptPath, scriptContent);
+    
+    // Créer un fichier requirements.txt pour les dépendances Python
+    const requirementsPath = path.join(scriptDir, 'requirements.txt');
+    fs.writeFileSync(requirementsPath, 'PyPDF2==3.0.1\n');
+  }
+
+  /**
+   * Lit le contenu d'un fichier Word
+   * @param {string} filePath - Chemin du fichier Word
+   * @returns {Promise<Object>} - Contenu du fichier Word
+   */
+  async readWord(filePath) {
+    // Pour lire un fichier Word, nous utiliserons un script Python
+    // car la bibliothèque docx en JavaScript est principalement pour la création
+    return new Promise((resolve, reject) => {
+      // Déterminer les chemins en fonction de si l'application est packagée ou non
+      const isPacked = app && app.isPackaged;
+      const pythonScript = isPacked
+        ? path.join(process.resourcesPath, 'python', 'word_text_extractor.py')
+        : path.join(__dirname, '../python/word_text_extractor.py');
+      
+      // Obtenir le chemin de l'exécutable Python embarqué si l'application est packagée
+      const pythonPath = isPacked
+        ? path.join(process.resourcesPath, 'python-runtime', process.platform === 'win32' ? 'Scripts/python.exe' : 'bin/python')
+        : null;
+      
+      // Vérifier si le script Python existe
+      if (!fs.existsSync(pythonScript)) {
+        // Créer le script Python s'il n'existe pas
+        this._createPythonWordExtractor();
+      }
+      
+      // Options pour PythonShell
+      const options = {
+        mode: 'text',
+        args: [filePath]
+      };
+      
+      // Utiliser le Python embarqué si disponible
+      if (pythonPath && fs.existsSync(pythonPath)) {
+        options.pythonPath = pythonPath;
+      }
+      
+      // Exécuter le script Python
+      PythonShell.run(pythonScript, options, (err, results) => {
+        if (err) {
+          reject(new Error(`Erreur lors de l'extraction du texte: ${err.message}`));
+        } else {
+          try {
+            const result = JSON.parse(results ? results.join('') : '{}');
+            resolve(result);
+          } catch (error) {
+            reject(new Error(`Erreur lors du parsing du résultat: ${error.message}`));
+          }
+        }
+      });
+    });
+  }
+
+  /**
+   * Crée un script Python pour extraire le texte des fichiers Word
+   */
+  _createPythonWordExtractor() {
+    // Déterminer les chemins en fonction de si l'application est packagée ou non
+    const isPacked = app && app.isPackaged;
+    const scriptDir = isPacked
+      ? path.join(process.resourcesPath, 'python')
+      : path.join(__dirname, '../python');
+    
+    // Créer le répertoire s'il n'existe pas
+    if (!fs.existsSync(scriptDir)) {
+      fs.mkdirSync(scriptDir, { recursive: true });
+    }
+    
+    const scriptPath = path.join(scriptDir, 'word_text_extractor.py');
+    
+    const scriptContent = `
+import sys
+import os
+import json
+import docx
+
+def extract_text_from_word(docx_path):
+    """Extract text and metadata from a Word document."""
+    if not os.path.exists(docx_path):
+        print(f"Error: File {docx_path} does not exist.", file=sys.stderr)
+        sys.exit(1)
+    
+    try:
+        doc = docx.Document(docx_path)
+        
+        # Extract text
+        full_text = []
+        for para in doc.paragraphs:
+            full_text.append(para.text)
+        
+        # Extract metadata
+        metadata = {
+            "fileName": os.path.basename(docx_path),
+            "paragraphCount": len(doc.paragraphs),
+            "sectionCount": len(doc.sections),
+            "tableCount": len(doc.tables)
+        }
+        
+        # Extract tables
+        tables = []
+        for i, table in enumerate(doc.tables):
+            table_data = []
+            for row in table.rows:
+                row_data = []
+                for cell in row.cells:
+                    row_data.append(cell.text)
+                table_data.append(row_data)
+            tables.append(table_data)
+        
+        result = {
+            "metadata": metadata,
+            "text": "\\n".join(full_text),
+            "tables": tables
+        }
+        
+        return result
+    except Exception as e:
+        print(f"Error: {str(e)}", file=sys.stderr)
+        sys.exit(1)
+
+if __name__ == "__main__":
+    if len(sys.argv) != 2:
+        print("Usage: python word_text_extractor.py <docx_file_path>", file=sys.stderr)
+        sys.exit(1)
+    
+    docx_path = sys.argv[1]
+    result = extract_text_from_word(docx_path)
+    print(json.dumps(result))
+`;
+    
+    fs.writeFileSync(scriptPath, scriptContent);
+    
+    // Créer un fichier requirements.txt pour les dépendances Python
+    const requirementsPath = path.join(scriptDir, 'requirements.txt');
+    const requirements = fs.existsSync(requirementsPath) 
+      ? fs.readFileSync(requirementsPath, 'utf8') + 'python-docx==0.8.11\n'
+      : 'python-docx==0.8.11\n';
+    
+    fs.writeFileSync(requirementsPath, requirements);
+  }
+
+  /**
+   * Crée un nouveau document Word
+   * @param {Object} options - Options pour le document
+   * @returns {Promise<Buffer>} - Document Word généré
+   */
+  async createWordDocument(options) {
+    try {
+      const { title, content, author = 'ABIA', sections = [] } = options;
+      
+      // Créer un nouveau document
+      const doc = new docx.Document({
+        creator: author,
+        title: title,
+        description: 'Document généré par ABIA',
+        styles: {
+          paragraphStyles: [
+            {
+              id: 'Heading1',
+              name: 'Heading 1',
+              basedOn: 'Normal',
+              next: 'Normal',
+              quickFormat: true,
+              run: {
+                size: 28,
+                bold: true,
+                color: '2E74B5'
+              },
+              paragraph: {
+                spacing: {
+                  after: 120
+                }
+              }
+            },
+            {
+              id: 'Heading2',
+              name: 'Heading 2',
+              basedOn: 'Normal',
+              next: 'Normal',
+              quickFormat: true,
+              run: {
+                size: 26,
+                bold: true,
+                color: '2E74B5'
+              },
+              paragraph: {
+                spacing: {
+                  before: 240,
+                  after: 120
+                }
+              }
+            }
+          ]
+        }
+      });
+      
+      // Ajouter le titre
+      const titleParagraph = new docx.Paragraph({
+        text: title,
+        heading: docx.HeadingLevel.HEADING_1,
+        alignment: docx.AlignmentType.CENTER
+      });
+      
+      // Ajouter le contenu principal
+      const contentParagraphs = content.split('\n').map(text => {
+        return new docx.Paragraph({
+          text: text,
+          spacing: {
+            line: 360
+          }
+        });
+      });
+      
+      // Ajouter les sections
+      const sectionParagraphs = [];
+      
+      sections.forEach(section => {
+        sectionParagraphs.push(
+          new docx.Paragraph({
+            text: section.title,
+            heading: docx.HeadingLevel.HEADING_2
+          })
+        );
+        
+        section.content.split('\n').forEach(text => {
+          sectionParagraphs.push(
+            new docx.Paragraph({
+              text: text,
+              spacing: {
+                line: 360
+              }
+            })
+          );
+        });
+      });
+      
+      // Ajouter tous les paragraphes au document
+      doc.addSection({
+        properties: {},
+        children: [titleParagraph, ...contentParagraphs, ...sectionParagraphs]
+      });
+      
+      // Générer le document
+      const buffer = await docx.Packer.toBuffer(doc);
+      return buffer;
+    } catch (error) {
+      console.error('Erreur lors de la création du document Word:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Crée un nouveau fichier Excel
+   * @param {Object} options - Options pour le fichier Excel
+   * @returns {Promise<Buffer>} - Fichier Excel généré
+   */
+  async createExcelWorkbook(options) {
+    try {
+      const { sheets, author = 'ABIA' } = options;
+      
+      // Créer un nouveau classeur
+      const workbook = await XlsxPopulate.fromBlankAsync();
+      
+      // Définir l'auteur
+      workbook.property('creator', author);
+      
+      // Supprimer la feuille par défaut
+      workbook.deleteSheet('Sheet1');
+      
+      // Ajouter les feuilles
+      for (const [sheetName, sheetData] of Object.entries(sheets)) {
+        const sheet = workbook.addSheet(sheetName);
+        
+        // Ajouter les données
+        if (Array.isArray(sheetData) && sheetData.length > 0) {
+          sheet.cell('A1').value(sheetData);
+          
+          // Mettre en forme les en-têtes
+          if (sheetData.length > 0 && Array.isArray(sheetData[0])) {
+            const headerRow = sheet.range(1, 1, 1, sheetData[0].length);
+            headerRow.style({
+              bold: true,
+              fill: 'D9D9D9'
+            });
+          }
+        }
+      }
+      
+      // Générer le fichier
+      const buffer = await workbook.outputAsync();
+      return buffer;
+    } catch (error) {
+      console.error('Erreur lors de la création du fichier Excel:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Crée un nouveau fichier PDF
+   * @param {Object} options - Options pour le fichier PDF
+   * @returns {Promise<Buffer>} - Fichier PDF généré
+   */
+  async createPDF(options) {
+    try {
+      const { title, content, author = 'ABIA', fontSize = 12 } = options;
+      
+      // Créer un nouveau document PDF
+      const pdfDoc = await PDFDocument.create();
+      
+      // Définir les métadonnées
+      pdfDoc.setTitle(title);
+      pdfDoc.setAuthor(author);
+      pdfDoc.setCreator('ABIA Assistant');
+      pdfDoc.setProducer('ABIA PDF Generator');
+      
+      // Ajouter une page
+      const page = pdfDoc.addPage();
+      
+      // Définir la taille de la police et la position
+      const { width, height } = page.getSize();
+      const margin = 50;
+      let y = height - margin;
+      
+      // Ajouter le titre
+      page.drawText(title, {
+        x: margin,
+        y,
+        size: fontSize + 4,
+        color: { r: 0, g: 0, b: 0 }
+      });
+      
+      y -= 30;
+      
+      // Ajouter le contenu
+      const lines = content.split('\n');
+      for (const line of lines) {
+        if (y < margin) {
+          // Ajouter une nouvelle page si nécessaire
+          const newPage = pdfDoc.addPage();
+          y = newPage.getSize().height - margin;
+        }
+        
+        page.drawText(line, {
+          x: margin,
+          y,
+          size: fontSize,
+          color: { r: 0, g: 0, b: 0 }
+        });
+        
+        y -= fontSize * 1.5;
+      }
+      
+      // Générer le fichier
+      const pdfBytes = await pdfDoc.save();
+      return Buffer.from(pdfBytes);
+    } catch (error) {
+      console.error('Erreur lors de la création du fichier PDF:', error);
+      throw error;
+    }
+  }
+}
+
+module.exports = DocumentService;

@@ -1,0 +1,349 @@
+// Import des modules nécessaires pour LangChain
+const { PromptTemplate } = require('langchain/prompts');
+const { LLMChain } = require('langchain/chains');
+const { HumanMessage, SystemMessage } = require('langchain/schema');
+const { StructuredOutputParser } = require('langchain/output_parsers');
+const config = require('../config/config');
+
+// Import pour les requêtes HTTP
+const axios = require('axios');
+
+/**
+ * Service LangChain pour l'intégration avec les modèles LLM
+ */
+class LangChainService {
+  constructor() {
+    this.initialize();
+  }
+
+  /**
+   * Initialise le service LangChain
+   */
+  initialize() {
+    try {
+      console.log('Début de l\'initialisation du service LangChain...');
+      
+      const apiKey = config.get('llm.apiKey', '');
+      const model = config.get('llm.model', 'deepseek-chat');
+      const temperature = config.get('llm.temperature', 0.7);
+      const maxTokens = config.get('llm.maxTokens', 1000);
+      
+      if (!apiKey) {
+        console.warn('Aucune clé API DeepSeek trouvée dans la configuration');
+        // Signaler clairement que l'initialisation a échoué
+        console.error('L\'initialisation du service LangChain a échoué : clé API manquante');
+        return false;
+      }
+      
+      console.log('Configuration du service LangChain pour DeepSeek...');
+      console.log(`Utilisation du modèle: ${model}, Température: ${temperature}`);
+      console.log(`Clé API: ${apiKey.substring(0, 5)}...${apiKey.substring(apiKey.length - 4)}`);
+      
+      // Stocker les paramètres DeepSeek
+      this.deepseekConfig = {
+        apiKey,
+        model,
+        temperature,
+        maxTokens,
+        baseUrl: 'https://api.deepseek.com/v1'
+      };
+      
+      // Vérifier la connexion à l'API DeepSeek
+      this.testApiConnection();
+      
+      return true;
+    } catch (error) {
+      console.error('Erreur lors de l\'initialisation du service LangChain:', error);
+      return false;
+    }
+  }
+  
+  /**
+   * Teste la connexion à l'API DeepSeek
+   * @returns {Promise<boolean>} - True si la connexion est établie
+   */
+  async testApiConnection() {
+    try {
+      console.log('Test de la connexion à l\'API DeepSeek...');
+      
+      // Créer une requête simple pour tester la connexion
+      const testMessage = [
+        { role: 'system', content: 'Vous êtes un assistant intelligent.' },
+        { role: 'user', content: 'Test de connexion' }
+      ];
+      
+      const response = await this.sendRequestToDeepSeek(testMessage);
+      
+      if (response && response.choices && response.choices.length > 0) {
+        console.log('Connexion à l\'API DeepSeek réussie!');
+        return true;
+      } else {
+        console.error('La connexion à l\'API DeepSeek a échoué: réponse inattendue');
+        return false;
+      }
+    } catch (error) {
+      console.error('Erreur lors du test de connexion à l\'API DeepSeek:', error.message);
+      return false;
+    }
+  }
+  
+  /**
+   * Envoie une requête à l'API DeepSeek
+   * @param {Array} messages - Messages à envoyer
+   * @param {Object} options - Options supplémentaires
+   * @returns {Promise<Object>} - Réponse de l'API
+   */
+  async sendRequestToDeepSeek(messages, options = {}) {
+    try {
+      if (!this.deepseekConfig || !this.deepseekConfig.apiKey) {
+        throw new Error('Configuration DeepSeek manquante ou clé API non définie');
+      }
+      
+      const requestData = {
+        model: options.model || this.deepseekConfig.model,
+        messages,
+        temperature: options.temperature !== undefined ? options.temperature : this.deepseekConfig.temperature,
+        max_tokens: options.maxTokens || this.deepseekConfig.maxTokens,
+        stream: options.stream || false
+      };
+      
+      const response = await axios.post(
+        `${this.deepseekConfig.baseUrl}/chat/completions`,
+        requestData,
+        {
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${this.deepseekConfig.apiKey}`
+          }
+        }
+      );
+      
+      return response.data;
+    } catch (error) {
+      console.error('Erreur lors de l\'envoi de la requête à DeepSeek:', 
+        error.response?.data?.error || error.message);
+      throw error;
+    }
+  }
+              }
+            }
+          }
+        });
+        
+        // Vérifier que le modèle a été correctement initialisé
+        if (!this.chatModel) {
+          throw new Error('Initialisation du chatModel échouée');
+        }
+        
+        console.log('Service LangChain initialisé avec succès pour DeepSeek');
+        return true;
+      } catch (initError) {
+        console.error('Erreur lors de l\'initialisation du ChatOpenAI:', initError);
+        console.error('Détails techniques:', initError.stack);
+        return false;
+      }
+    } catch (error) {
+      console.error('Erreur lors de l\'initialisation du service LangChain:', error);
+      console.error('Détails techniques:', error.stack);
+      return false;
+    }
+  }
+
+  /**
+   * Classifie une requête utilisateur pour déterminer quel agent doit la traiter
+   * @param {string} query - Requête de l'utilisateur
+   * @returns {Promise<Object>} - Type de requête et score de confiance
+   */
+  async classifyQuery(query) {
+    try {
+      // Vérifier si le modèle de chat est initialisé
+      if (!this.chatModel) {
+        console.warn('Le modèle ChatOpenAI n\'est pas initialisé, retour à la classification par défaut');
+        return { type: 'general', confidence: 0.5, reasoning: 'Modèle non initialisé' };
+      }
+      
+      // Définir le parser pour la sortie structurée
+      const parser = StructuredOutputParser.fromNamesAndDescriptions({
+        type: "Le type de requête (excel, mail, document, general)",
+        confidence: "Score de confiance entre 0 et 1",
+        reasoning: "Raisonnement derrière la classification"
+      });
+
+      const formatInstructions = parser.getFormatInstructions();
+
+      // Créer le template de prompt
+      const promptTemplate = new PromptTemplate({
+        template: `Classifie la requête de l'utilisateur dans l'une des catégories suivantes:
+- excel: requêtes liées à l'analyse ou la manipulation de fichiers Excel
+- mail: requêtes liées à la génération ou l'analyse de courriers électroniques ou lettres
+- document: requêtes liées à l'analyse ou l'extraction d'informations de documents (PDF, Word, etc.)
+- general: requêtes générales qui ne correspondent à aucune des catégories ci-dessus
+
+Requête: {query}
+
+{format_instructions}`,
+        inputVariables: ["query"],
+        partialVariables: { format_instructions: formatInstructions }
+      });
+
+      // Créer la chaîne LLM
+      const chain = new LLMChain({
+        llm: this.chatModel,
+        prompt: promptTemplate
+      });
+
+      // Exécuter la chaîne
+      const response = await chain.call({ query });
+      
+      // Analyser la réponse
+      const parsedResponse = parser.parse(response.text);
+      return parsedResponse;
+    } catch (error) {
+      console.error('Erreur lors de la classification de la requête:', error);
+      // Retourner une classification par défaut en cas d'erreur
+      return { type: 'general', confidence: 0.5, reasoning: 'Classification par défaut due à une erreur' };
+    }
+  }
+
+  /**
+   * Génère une réponse à une requête utilisateur en utilisant un agent spécifique
+   * @param {string} query - Requête de l'utilisateur
+   * @param {string} agentType - Type d'agent (excel, mail, document, general)
+   * @param {Object} context - Contexte supplémentaire (fichier, etc.)
+   * @returns {Promise<string>} - Réponse générée
+   */
+  async generateAgentResponse(query, agentType, context = {}) {
+    // Vérifier si le modèle de chat est initialisé
+    if (!this.chatModel) {
+      console.warn('Le modèle ChatOpenAI n\'est pas initialisé, impossible de générer une réponse');
+      return `Désolé, je ne peux pas traiter votre demande pour le moment. Le service LLM n'est pas disponible.`;
+    }
+    
+    let systemPrompt;
+    
+    switch (agentType) {
+      case 'excel':
+        systemPrompt = `Tu es un assistant spécialisé dans l'analyse de fichiers Excel. 
+Utilise les informations suivantes sur le fichier pour répondre à la requête de l'utilisateur:
+${JSON.stringify(context, null, 2)}`;
+        break;
+        
+      case 'mail':
+        systemPrompt = `Tu es un assistant spécialisé dans la génération de courriers et lettres.
+Aide l'utilisateur à rédiger des lettres professionnelles et formelles.`;
+        break;
+        
+      case 'document':
+        systemPrompt = `Tu es un assistant spécialisé dans l'analyse de documents.
+Utilise les informations suivantes extraites du document pour répondre à la requête de l'utilisateur:
+${JSON.stringify(context, null, 2)}`;
+        break;
+        
+      case 'general':
+      default:
+        systemPrompt = `Tu es ABIA, un assistant IA multifonction qui aide les utilisateurs à accomplir diverses tâches.
+Tu peux analyser des fichiers Excel, générer des lettres et analyser des documents.
+Réponds de manière concise, utile et amicale. Si tu ne peux pas répondre à une question, suggère d'utiliser l'un des agents spécialisés.
+Date actuelle: ${new Date().toLocaleDateString('fr-FR')}`;
+        break;
+    }
+    
+    // Créer les messages
+    const messages = [
+      new SystemMessage(systemPrompt),
+      new HumanMessage(query)
+    ];
+    
+    // Appeler le modèle
+    const response = await this.chatModel.call(messages);
+    return response.content;
+  }
+
+  /**
+   * Extrait des informations structurées d'un texte
+   * @param {string} text - Texte à analyser
+   * @param {Object} schema - Schéma des informations à extraire
+   * @returns {Promise<Object>} - Informations extraites
+   */
+  async extractStructuredInformation(text, schema) {
+    try {
+      // Vérifier si le modèle de chat est initialisé
+      if (!this.chatModel) {
+        console.warn('Le modèle ChatOpenAI n\'est pas initialisé, impossible d\'extraire des informations');
+        return { error: 'Service LLM non disponible' };
+      }
+      
+      // Créer un parser pour la sortie structurée basé sur le schéma
+      const parser = StructuredOutputParser.fromNamesAndDescriptions(schema);
+      const formatInstructions = parser.getFormatInstructions();
+      
+      // Créer le template de prompt
+      const promptTemplate = new PromptTemplate({
+        template: `Extrait les informations suivantes du texte ci-dessous selon le format spécifié.
+
+Texte:
+{text}
+
+{format_instructions}`,
+        inputVariables: ["text"],
+        partialVariables: { format_instructions: formatInstructions }
+      });
+      
+      // Créer la chaîne LLM
+      const chain = new LLMChain({
+        llm: this.chatModel,
+        prompt: promptTemplate
+      });
+      
+      // Exécuter la chaîne
+      const response = await chain.call({ text });
+      
+      // Parser la réponse
+      return parser.parse(response.text);
+    } catch (error) {
+      console.error('Erreur lors de l\'extraction d\'informations structurées:', error);
+      return { error: 'Erreur lors de l\'extraction d\'informations', rawResponse: error.message };
+    }
+  }
+
+  /**
+   * Génère un résumé d'un texte
+   * @param {string} text - Texte à résumer
+   * @param {number} maxLength - Longueur maximale du résumé en mots
+   * @returns {Promise<string>} - Résumé généré
+   */
+  async summarizeText(text, maxLength = 200) {
+    try {
+      // Vérifier si le modèle de chat est initialisé
+      if (!this.chatModel) {
+        console.warn('Le modèle ChatOpenAI n\'est pas initialisé, impossible de générer un résumé');
+        return 'Service LLM non disponible. Impossible de générer un résumé.';
+      }
+      
+      // Créer le template de prompt
+      const promptTemplate = new PromptTemplate({
+        template: `Résume le texte suivant en {maxLength} mots maximum:
+
+{text}
+
+Résumé:`,
+        inputVariables: ["text", "maxLength"]
+      });
+      
+      // Créer la chaîne LLM
+      const chain = new LLMChain({
+        llm: this.chatModel,
+        prompt: promptTemplate
+      });
+      
+      // Exécuter la chaîne
+      const response = await chain.call({ text, maxLength });
+      return response.text;
+    } catch (error) {
+      console.error('Erreur lors de la génération du résumé:', error);
+      return `Erreur lors de la génération du résumé: ${error.message}`;
+    }
+  }
+}
+
+module.exports = new LangChainService();

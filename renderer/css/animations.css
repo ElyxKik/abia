@@ -1,0 +1,182 @@
+/* Animations pour le chargement */
+.loading-animation {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.loading-animation .dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background-color: currentColor;
+  opacity: 0.6;
+  animation: pulse 1.5s infinite ease-in-out;
+}
+
+.loading-animation .dot:nth-child(1) {
+  animation-delay: 0s;
+}
+
+.loading-animation .dot:nth-child(2) {
+  animation-delay: 0.2s;
+}
+
+.loading-animation .dot:nth-child(3) {
+  animation-delay: 0.4s;
+}
+
+.loading-animation .dot:nth-child(4) {
+  animation-delay: 0.6s;
+}
+
+.loading-animation .dot:nth-child(5) {
+  animation-delay: 0.8s;
+}
+
+@keyframes pulse {
+  0%, 100% {
+    transform: scale(0.8);
+    opacity: 0.6;
+  }
+  50% {
+    transform: scale(1.2);
+    opacity: 1;
+  }
+}
+
+/* Animation de l'icône de l'agent */
+.agent-icon {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.agent-icon.thinking i {
+  animation: thinking 2s infinite ease-in-out;
+}
+
+.agent-icon.processing i {
+  animation: processing 1.5s infinite linear;
+}
+
+@keyframes thinking {
+  0%, 100% {
+    transform: scale(1);
+  }
+  50% {
+    transform: scale(1.2);
+  }
+}
+
+@keyframes processing {
+  0% {
+    transform: rotate(0deg);
+  }
+  100% {
+    transform: rotate(360deg);
+  }
+}
+
+/* Animation de texte pour le chargement */
+.loading-text {
+  display: inline-block;
+  position: relative;
+  min-width: 120px;
+}
+
+.loading-text::after {
+  content: '';
+  position: absolute;
+  animation: loadingDots 1.5s infinite;
+}
+
+@keyframes loadingDots {
+  0% {
+    content: '';
+  }
+  25% {
+    content: '.';
+  }
+  50% {
+    content: '..';
+  }
+  75% {
+    content: '...';
+  }
+  100% {
+    content: '';
+  }
+}
+
+/* Animation pour les transitions d'agents */
+.agent-transition {
+  animation: fadeInUp 0.5s ease-out;
+}
+
+@keyframes fadeInUp {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* Animation pour les actions disponibles */
+.action-buttons {
+  animation: fadeIn 0.3s ease-out;
+}
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+/* Animation pour le bouton de mode sombre */
+.theme-icon {
+  transition: transform 0.5s ease, opacity 0.3s ease;
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+}
+
+#theme-toggle {
+  position: relative;
+  overflow: hidden;
+  width: 36px;
+  height: 36px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+/* Mode clair */
+:root:not(.dark) .light-icon {
+  opacity: 1;
+  transform: translate(-50%, -50%) rotate(0) scale(1);
+}
+
+:root:not(.dark) .dark-icon {
+  opacity: 0;
+  transform: translate(-50%, -50%) rotate(180deg) scale(0.5);
+}
+
+/* Mode sombre */
+:root.dark .light-icon {
+  opacity: 0;
+  transform: translate(-50%, -50%) rotate(-180deg) scale(0.5);
+}
+
+:root.dark .dark-icon {
+  opacity: 1;
+  transform: translate(-50%, -50%) rotate(0) scale(1);
+}

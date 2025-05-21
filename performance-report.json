@@ -1,0 +1,59 @@
+{
+  "timestamp": "2025-05-21T11:26:04.331Z",
+  "results": [
+    {
+      "query": "Bonjour, comment vas-tu ?",
+      "label": "Requête de chat simple",
+      "success": true,
+      "agentType": "chat",
+      "processingTime": 5895
+    },
+    {
+      "query": "Crée un dossier nommé Test",
+      "label": "Requête système de fichiers",
+      "success": true,
+      "agentType": "filesystem",
+      "processingTime": "non mesuré"
+    },
+    {
+      "query": "Analyse ce document PDF",
+      "label": "Requête document",
+      "success": true,
+      "agentType": "document",
+      "processingTime": 2
+    },
+    {
+      "query": "Envoie un email à Jean",
+      "label": "Requête mail",
+      "success": true,
+      "agentType": "mail",
+      "processingTime": 1
+    },
+    {
+      "query": "Analyse ce fichier Excel",
+      "label": "Requête Excel",
+      "success": true,
+      "agentType": "excel",
+      "processingTime": "non mesuré"
+    },
+    {
+      "query": "Bonjour, comment vas-tu ?",
+      "label": "Requête de chat répétée (test cache)",
+      "success": true,
+      "agentType": "excel",
+      "processingTime": "non mesuré"
+    },
+    {
+      "query": "Crée un dossier nommé Test",
+      "label": "Requête système de fichiers répétée (test cache)",
+      "success": true,
+      "agentType": "filesystem",
+      "processingTime": "non mesuré"
+    }
+  ],
+  "summary": {
+    "totalTests": 7,
+    "successfulTests": 7,
+    "averageTime": 843
+  }
+}

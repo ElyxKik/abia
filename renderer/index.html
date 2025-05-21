@@ -1,0 +1,349 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>ABIA - Assistant Intelligent</title>
+  <link rel="stylesheet" href="css/output.css">
+  <link rel="stylesheet" href="css/animations.css">
+  <link rel="stylesheet" href="css/folder-buttons.css">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+</head>
+<body class="h-screen flex flex-col overflow-hidden">
+  <!-- Header -->
+  <header class="bg-white dark:bg-neutral-800 border-b border-neutral-200 dark:border-neutral-700 py-2 px-4 flex items-center justify-between">
+    <div class="flex items-center">
+      <img src="assets/logo.svg" alt="ABIA Logo" class="h-8 w-8 mr-2">
+      <h1 class="text-xl font-semibold m-0">ABIA</h1>
+    </div>
+    <div class="flex items-center space-x-2">
+      <button id="theme-toggle" class="p-2 rounded-full hover:bg-neutral-100 dark:hover:bg-neutral-700 relative">
+        <i class="fas fa-sun theme-icon light-icon"></i>
+        <i class="fas fa-moon theme-icon dark-icon"></i>
+      </button>
+      <button id="language-toggle" class="p-2 rounded-full hover:bg-neutral-100 dark:hover:bg-neutral-700">
+        <span class="font-medium">FR</span>
+      </button>
+      <button id="settings-button" class="p-2 rounded-full hover:bg-neutral-100 dark:hover:bg-neutral-700">
+        <i class="fas fa-cog"></i>
+      </button>
+    </div>
+  </header>
+
+  <!-- Main Content -->
+  <main class="flex flex-1 overflow-hidden">
+    <!-- Sidebar -->
+    <aside id="sidebar" class="w-64 bg-white dark:bg-neutral-800 border-r border-neutral-200 dark:border-neutral-700 flex flex-col">
+      <!-- Sidebar Header -->
+      <div class="p-4 border-b border-neutral-200 dark:border-neutral-700">
+        <button id="new-chat-button" class="btn btn-primary w-full flex items-center justify-center text-sm">
+          <i class="fas fa-plus mr-2"></i>
+          <span>Nouvelle conversation</span>
+        </button>
+      </div>
+
+      <!-- Sidebar Navigation -->
+      <nav class="p-2 flex-1 overflow-y-auto">
+        <div class="mb-4">
+          <h2 class="text-xs font-semibold text-neutral-500 dark:text-neutral-400 uppercase tracking-wider px-3 mb-2">Navigation</h2>
+          <ul>
+            <li>
+              <a href="#dashboard" class="sidebar-item active">
+                <i class="fas fa-brain mr-3"></i>
+                <span>Tableau de bord</span>
+              </a>
+            </li>
+            <li>
+              <a href="#chat" class="sidebar-item">
+                <i class="fas fa-comment-alt mr-3"></i>
+                <span>Chat IA</span>
+              </a>
+            </li>
+            <li>
+              <a href="#history" class="sidebar-item">
+                <i class="fas fa-history mr-3"></i>
+                <span>Historique</span>
+              </a>
+            </li>
+          </ul>
+        </div>
+
+        <div class="mb-4">
+          <h2 class="text-xs font-semibold text-neutral-500 dark:text-neutral-400 uppercase tracking-wider px-3 mb-2">Agents IA</h2>
+          <ul>
+            <li>
+              <a href="#excel-agent" class="sidebar-item">
+                <i class="fas fa-table mr-3"></i>
+                <span>Agent Excel</span>
+              </a>
+            </li>
+            <li>
+              <a href="#mail-agent" class="sidebar-item">
+                <i class="fas fa-envelope mr-3"></i>
+                <span>Agent Courriers</span>
+              </a>
+            </li>
+            <li>
+              <a href="#doc-agent" class="sidebar-item">
+                <i class="fas fa-file-alt mr-3"></i>
+                <span>Agent Documents</span>
+              </a>
+            </li>
+          </ul>
+        </div>
+
+        <div>
+          <h2 class="text-xs font-semibold text-neutral-500 dark:text-neutral-400 uppercase tracking-wider px-3 mb-2">Conversations récentes</h2>
+          <ul id="recent-conversations">
+            <!-- Conversations récentes seront ajoutées ici dynamiquement -->
+            <li>
+              <a href="#" class="sidebar-item">
+                <i class="fas fa-comment mr-3"></i>
+                <span>Analyse des ventes Q1</span>
+              </a>
+            </li>
+            <li>
+              <a href="#" class="sidebar-item">
+                <i class="fas fa-comment mr-3"></i>
+                <span>Lettre de motivation</span>
+              </a>
+            </li>
+          </ul>
+        </div>
+      </nav>
+
+      <!-- Sidebar Footer -->
+      <div class="p-4 border-t border-neutral-200 dark:border-neutral-700">
+        <div class="text-sm text-neutral-500 dark:text-neutral-400">
+          <div class="flex items-center">
+            <i class="fas fa-info-circle mr-2"></i>
+            <span>ABIA v1.0.0</span>
+          </div>
+        </div>
+      </div>
+    </aside>
+
+    <!-- Content Area -->
+    <div class="flex-1 flex flex-col overflow-hidden">
+      <!-- Page Content -->
+      <div id="content" class="flex-1 overflow-y-auto">
+        <!-- Dashboard View (default) -->
+        <div id="dashboard-view" class="p-6">
+          <h1 class="text-2xl font-bold mb-6">Tableau de bord</h1>
+          
+          <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 mb-8">
+            <!-- Statistiques -->
+            <div class="card">
+              <h2 class="text-lg font-semibold mb-4">Statistiques</h2>
+              <div class="space-y-4">
+                <div>
+                  <div class="flex justify-between mb-1">
+                    <span class="text-sm font-medium">Conversations</span>
+                    <span id="stats-conversations-count" class="text-sm font-medium">0</span>
+                  </div>
+                  <div class="w-full bg-neutral-200 dark:bg-neutral-700 rounded-full h-2">
+                    <div id="stats-conversations-progress" class="bg-primary-600 h-2 rounded-full" style="width: 0%"></div>
+                  </div>
+                </div>
+                <div>
+                  <div class="flex justify-between mb-1">
+                    <span class="text-sm font-medium">Documents analysés</span>
+                    <span id="stats-documents-count" class="text-sm font-medium">0</span>
+                  </div>
+                  <div class="w-full bg-neutral-200 dark:bg-neutral-700 rounded-full h-2">
+                    <div id="stats-documents-progress" class="bg-secondary-600 h-2 rounded-full" style="width: 0%"></div>
+                  </div>
+                </div>
+                <div>
+                  <div class="flex justify-between mb-1">
+                    <span class="text-sm font-medium">Fichiers générés</span>
+                    <span id="stats-files-count" class="text-sm font-medium">0</span>
+                  </div>
+                  <div class="w-full bg-neutral-200 dark:bg-neutral-700 rounded-full h-2">
+                    <div id="stats-files-progress" class="bg-green-600 h-2 rounded-full" style="width: 0%"></div>
+                  </div>
+                </div>
+              </div>
+            </div>
+            
+            <!-- Activité récente -->
+            <div class="card">
+              <h2 class="text-lg font-semibold mb-4">Activité récente</h2>
+              <ul id="recent-activity" class="space-y-3">
+                <li class="flex items-start">
+                  <div class="flex-shrink-0 h-8 w-8 rounded-full bg-primary-100 dark:bg-primary-900/30 flex items-center justify-center text-primary-600 dark:text-primary-400">
+                    <i class="fas fa-comment-alt"></i>
+                  </div>
+                  <div class="ml-3">
+                    <p class="text-sm font-medium">Chargement des activités...</p>
+                    <p class="text-xs text-neutral-500 dark:text-neutral-400">Veuillez patienter</p>
+                  </div>
+                </li>
+              </ul>
+            </div>
+            
+
+          </div>
+          
+          <!-- Widgets -->
+          <h2 class="text-xl font-bold mb-4">Widgets</h2>
+          <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+            
+            <!-- Tâches -->
+            <div id="tasks-widget" class="card">
+              <div class="flex justify-between items-start mb-4">
+                <h3 class="text-lg font-semibold">Tâches</h3>
+                <i class="fas fa-tasks text-xl text-purple-500"></i>
+              </div>
+              <div class="space-y-2">
+                <div>
+                  <div class="flex justify-between mb-1">
+                    <span class="text-sm">Chargement...</span>
+                    <span class="text-xs">0%</span>
+                  </div>
+                  <div class="w-full bg-neutral-200 dark:bg-neutral-700 rounded-full h-2">
+                    <div class="bg-purple-600 h-2 rounded-full" style="width: 0%"></div>
+                  </div>
+                </div>
+              </div>
+              <button class="btn btn-outline w-full mt-4 text-sm py-1">Voir tout</button>
+            </div>
+            
+            <!-- Ressources -->
+            <div id="resources-widget" class="card">
+              <div class="flex justify-between items-start mb-4">
+                <h3 class="text-lg font-semibold">Ressources</h3>
+                <i class="fas fa-book text-xl text-green-500"></i>
+              </div>
+              <ul class="space-y-2">
+                <li>
+                  <a href="#" class="text-sm flex items-center">
+                    <i class="fas fa-file-pdf text-red-500 mr-2"></i>
+                    <span>Guide utilisateur</span>
+                  </a>
+                </li>
+                <li>
+                  <a href="#" class="text-sm flex items-center">
+                    <i class="fas fa-video text-blue-500 mr-2"></i>
+                    <span>Tutoriel vidéo</span>
+                  </a>
+                </li>
+                <li>
+                  <a href="#" class="text-sm flex items-center">
+                    <i class="fas fa-question-circle text-purple-500 mr-2"></i>
+                    <span>FAQ</span>
+                  </a>
+                </li>
+              </ul>
+            </div>
+          </div>
+        </div>
+
+        <!-- History View (hidden by default) -->
+        <div id="history-view" class="p-6" style="display: none;">
+          <h1 class="text-2xl font-bold mb-6">Historique</h1>
+          
+          <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
+            <!-- Sessions passées -->
+            <div class="md:col-span-1">
+              <div class="card">
+                <h2 class="text-lg font-semibold mb-4">Sessions</h2>
+                <div id="history-sessions" class="space-y-4">
+                  <p class="text-center text-neutral-500 dark:text-neutral-400 py-6">Chargement des sessions...</p>
+                </div>
+              </div>
+            </div>
+            
+            <!-- Conversations récentes -->
+            <div class="md:col-span-2">
+              <div class="card">
+                <h2 class="text-lg font-semibold mb-4">Conversations récentes</h2>
+                <div id="history-conversations" class="max-h-[500px] overflow-y-auto divide-y divide-neutral-200 dark:divide-neutral-700">
+                  <p class="text-center text-neutral-500 dark:text-neutral-400 py-6">Chargement des conversations...</p>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+        
+        <!-- Chat View (hidden by default) -->
+        <div id="chat-view" class="h-full flex flex-col" style="display: none;">
+          <div id="chat-messages" class="flex-1 overflow-y-auto p-4 space-y-4">
+            <!-- Messages will be added here dynamically -->
+            <!-- Message d'accueil - le seul message qui doit rester quand on démarre une nouvelle conversation -->
+            <div class="chat-message chat-message-ai" id="welcome-message">
+              <div class="flex items-start">
+                <div class="flex-shrink-0 h-8 w-8 rounded-full bg-primary-100 dark:bg-primary-900/30 flex items-center justify-center text-primary-600 dark:text-primary-400">
+                  <i class="fas fa-robot"></i>
+                </div>
+                <div class="ml-3">
+                  <p class="text-sm">Bonjour ! Je suis ABIA, votre assistant intelligent. Comment puis-je vous aider aujourd'hui ?</p>
+                </div>
+              </div>
+            </div>
+          </div>
+          
+          <!-- Command Buttons Bar -->
+          <div class="border-t border-neutral-200 dark:border-neutral-700 p-3">
+            <div class="flex justify-center overflow-x-auto pb-1">
+              <div class="flex gap-2">
+                <button id="cmd-create-folder" class="btn btn-sm btn-outline text-xs py-1 flex items-center">
+                  <i class="fas fa-folder-plus mr-1"></i> Créer un dossier
+                </button>
+                <button id="cmd-list-files" class="btn btn-sm btn-outline text-xs py-1 flex items-center">
+                  <i class="fas fa-list mr-1"></i> Lister les fichiers
+                </button>
+                <button id="cmd-import-excel" class="btn btn-sm btn-outline text-xs py-1 flex items-center">
+                  <i class="fas fa-file-excel mr-1"></i> Importer Excel
+                </button>
+                <button id="cmd-import-document" class="btn btn-sm btn-outline text-xs py-1 flex items-center">
+                  <i class="fas fa-file-pdf mr-1"></i> Importer Document
+                </button>
+                <button id="cmd-write-mail" class="btn btn-sm btn-outline text-xs py-1 flex items-center">
+                  <i class="fas fa-envelope mr-1"></i> Rédiger un mail
+                </button>
+                <button id="cmd-classify-docs" class="btn btn-sm btn-outline text-xs py-1 flex items-center">
+                  <i class="fas fa-tags mr-1"></i> Classer documents
+                </button>
+              </div>
+            </div>
+          </div>
+          
+          <!-- Chat Input -->
+          <div class="border-t border-neutral-200 dark:border-neutral-700 p-4">
+            <div class="relative">
+              <textarea id="chat-input" class="input pr-24 resize-none h-12 py-3" placeholder="Envoyez un message..."></textarea>
+              <div class="absolute right-2 top-2 flex space-x-1">
+                <button id="file-upload-button" class="p-2 text-neutral-500 hover:text-neutral-700 dark:text-neutral-400 dark:hover:text-neutral-200" title="Joindre un fichier">
+                  <i class="fas fa-paperclip"></i>
+                </button>
+                <input type="file" id="file-upload-input" class="hidden" />
+                <button class="p-2 text-neutral-500 hover:text-neutral-700 dark:text-neutral-400 dark:hover:text-neutral-200">
+                  <i class="fas fa-microphone"></i>
+                </button>
+                <button id="send-message" class="p-2 text-primary-600 hover:text-primary-700 dark:text-primary-400 dark:hover:text-primary-300">
+                  <i class="fas fa-paper-plane"></i>
+                </button>
+              </div>
+            </div>
+            <div class="mt-2 text-xs text-neutral-500 dark:text-neutral-400">
+              ABIA peut faire des erreurs. Vérifiez les informations importantes.
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </main>
+
+  <!-- Scripts -->
+  <script src="js/navigation.js"></script>
+  <script src="js/command-buttons.js"></script>
+  <script src="js/new-chat-button.js"></script>
+  <script src="js/file-uploader.js"></script>
+  <script src="js/dashboard.js"></script>
+  <script src="js/app.js"></script>
+</body>
+</html>

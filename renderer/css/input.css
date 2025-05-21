@@ -1,0 +1,101 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  html {
+    font-family: 'Inter', system-ui, sans-serif;
+  }
+  
+  body {
+    @apply bg-white dark:bg-neutral-900 text-neutral-900 dark:text-white;
+  }
+
+  h1 {
+    @apply text-2xl font-bold mb-4;
+  }
+  
+  h2 {
+    @apply text-xl font-bold mb-3;
+  }
+  
+  h3 {
+    @apply text-lg font-bold mb-2;
+  }
+  
+  a {
+    @apply text-primary-600 dark:text-primary-400 hover:underline;
+  }
+
+  code {
+    @apply font-mono text-sm bg-neutral-100 dark:bg-neutral-800 px-1 py-0.5 rounded;
+  }
+
+  pre {
+    @apply font-mono text-sm bg-neutral-100 dark:bg-neutral-800 p-3 my-2 rounded overflow-x-auto;
+  }
+}
+
+@layer components {
+  .btn {
+    @apply px-4 py-2 rounded font-medium transition-colors duration-200;
+  }
+  
+  .btn-primary {
+    @apply bg-primary-600 text-white hover:bg-primary-700 dark:bg-primary-700 dark:hover:bg-primary-800;
+  }
+  
+  .btn-secondary {
+    @apply bg-secondary-600 text-white hover:bg-secondary-700 dark:bg-secondary-700 dark:hover:bg-secondary-800;
+  }
+  
+  .btn-outline {
+    @apply border border-neutral-300 dark:border-neutral-700 hover:bg-neutral-100 dark:hover:bg-neutral-800;
+  }
+  
+  .input {
+    @apply w-full px-3 py-2 border border-neutral-300 dark:border-neutral-700 rounded bg-white dark:bg-neutral-800 focus:outline-none focus:ring-2 focus:ring-primary-500;
+  }
+  
+  .card {
+    @apply bg-white dark:bg-neutral-800 rounded-lg shadow-soft p-4;
+  }
+  
+  .sidebar-item {
+    @apply flex items-center px-4 py-2 text-neutral-700 dark:text-neutral-300 hover:bg-neutral-100 dark:hover:bg-neutral-800 rounded-md transition-colors duration-200;
+  }
+  
+  .sidebar-item.active {
+    @apply bg-primary-50 dark:bg-primary-900/30 text-primary-700 dark:text-primary-300;
+  }
+  
+  .chat-message {
+    @apply p-4 mb-4 rounded-lg;
+  }
+  
+  .chat-message-user {
+    @apply bg-primary-50 dark:bg-primary-900/30 text-neutral-900 dark:text-white;
+  }
+  
+  .chat-message-ai {
+    @apply bg-neutral-100 dark:bg-neutral-800 text-neutral-900 dark:text-white;
+  }
+}
+
+/* Custom scrollbar */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+::-webkit-scrollbar-track {
+  @apply bg-neutral-100 dark:bg-neutral-800;
+}
+
+::-webkit-scrollbar-thumb {
+  @apply bg-neutral-300 dark:bg-neutral-600 rounded-full;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  @apply bg-neutral-400 dark:bg-neutral-500;
+}
