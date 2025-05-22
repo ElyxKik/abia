@@ -1,0 +1,81 @@
+/**
+ * Styles pour le visualiseur de rapports Excel
+ */
+
+.excel-report {
+  font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  max-width: 100%;
+  overflow-x: auto;
+}
+
+.report-header {
+  margin-bottom: 1rem;
+}
+
+.section-card {
+  transition: all 0.2s ease-in-out;
+}
+
+.section-card:hover {
+  box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+}
+
+.section-header {
+  cursor: pointer;
+}
+
+.chart-container {
+  height: 300px;
+  position: relative;
+}
+
+/* Animations */
+.animate-fade-in {
+  animation: fadeIn 0.3s ease-in-out;
+}
+
+.animate-fade-out {
+  animation: fadeOut 0.3s ease-in-out;
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(10px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes fadeOut {
+  from { opacity: 1; transform: translateY(0); }
+  to { opacity: 0; transform: translateY(10px); }
+}
+
+/* Responsive styles */
+@media (max-width: 768px) {
+  .report-sections {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* Print styles */
+@media print {
+  .excel-report {
+    break-inside: avoid;
+    page-break-inside: avoid;
+  }
+  
+  .report-actions {
+    display: none;
+  }
+  
+  .section-card {
+    break-inside: avoid;
+    page-break-inside: avoid;
+    border: 1px solid #ddd;
+    margin-bottom: 1rem;
+  }
+  
+  .chart-container:not(.hidden) {
+    height: 200px;
+    break-inside: avoid;
+    page-break-inside: avoid;
+  }
+}
