@@ -26,7 +26,7 @@ function initMailAgent() {
   }
   
   // Gestionnaire d'événement pour la génération de document
-  generateBtn.addEventListener('click', () => {
+  generateBtn.addEventListener('click', async () => {
     const type = mailType.value;
     const description = mailDescription.value.trim();
     
@@ -35,50 +35,98 @@ function initMailAgent() {
       return;
     }
     
-    // Simuler une génération en cours
+    // Afficher le message de patience standard dans le chat principal
+    const processingMessageId = window.agentUtils.showFileProcessingMessage('document de correspondance');
+    
+    // Indiquer que la génération est en cours
     generateBtn.disabled = true;
     generateBtn.innerHTML = '<i class="fas fa-spinner fa-spin mr-2"></i> Génération en cours...';
     results.classList.add('hidden');
     
-    // Envoyer le type et la description au backend
-    const data = {
-      type: type,
-      description: description
-    };
+    // S'assurer que le popup de chargement ne s'affiche pas
+    const processingAnimation = document.getElementById('processing-animation');
+    if (processingAnimation) {
+      processingAnimation.style.display = 'none';
+    }
     
-    // Simuler un délai de traitement (à remplacer par un appel API réel)
-    setTimeout(() => {
-      // Générer un document en fonction du type sélectionné
-      let documentContent = '';
+    try {
+      console.log(`Génération d'un document de type ${type} avec la description: ${description}`);
       
-      switch (type) {
-        case 'letter':
-          documentContent = generateFormalLetter(description);
-          break;
-        case 'email':
-          documentContent = generateProfessionalEmail(description);
-          break;
-        case 'complaint':
-          documentContent = generateComplaintLetter(description);
-          break;
-        case 'cover':
-          documentContent = generateCoverLetter(description);
-          break;
-        case 'resignation':
-          documentContent = generateResignationLetter(description);
-          break;
-        default:
-          documentContent = generateCustomDocument(description);
+      // Préparer les données pour l'API
+      const data = {
+        type: type,
+        description: description
+      };
+      
+      // Appel réel à l'API Electron pour générer le document
+      const response = await window.api.generateLetter(type, data);
+      
+      // Vérifier si la réponse contient une erreur
+      if (response.error) {
+        throw new Error(response.error);
       }
       
-      // Afficher le document généré
-      resultsContent.innerHTML = documentContent;
+      // Obtenir le contenu du document généré
+      let documentContent = response.content;
       
+      // Si aucun contenu n'est retourné par l'API, utiliser les fonctions locales de génération
+      if (!documentContent) {
+        switch (type) {
+          case 'letter':
+            documentContent = generateFormalLetter(description);
+            break;
+          case 'email':
+            documentContent = generateProfessionalEmail(description);
+            break;
+          case 'complaint':
+            documentContent = generateComplaintLetter(description);
+            break;
+          case 'cover':
+            documentContent = generateCoverLetter(description);
+            break;
+          case 'resignation':
+            documentContent = generateResignationLetter(description);
+            break;
+          default:
+            documentContent = generateCustomDocument(description);
+        }
+      }
+      
+      // Formater la réponse pour l'affichage dans le chat
+      const typeLabel = mailType.options[mailType.selectedIndex].text;
+      const chatResultHtml = `
+        <p>Voici le document <strong>${typeLabel}</strong> que j'ai généré selon votre description :</p>
+        <blockquote class="p-3 bg-neutral-100 dark:bg-neutral-800 rounded-lg my-3">${description}</blockquote>
+        <div class="document-preview p-4 border border-neutral-200 dark:border-neutral-700 rounded-lg">
+          ${documentContent}
+        </div>
+        <p class="mt-3">Vous pouvez copier ou télécharger ce document depuis l'onglet "Agent Courriers".</p>
+      `;
+      
+      // Mettre à jour le message dans le chat principal avec les résultats
+      window.agentUtils.addOrUpdateAgentChatMessage(chatResultHtml, processingMessageId, false);
+      
+      // Afficher également les résultats dans la section de l'agent Courriers
+      resultsContent.innerHTML = documentContent;
+      results.classList.remove('hidden');
+    } catch (error) {
+      console.error('Erreur lors de la génération du document:', error);
+      
+      // Afficher l'erreur dans le chat principal
+      const errorMessage = `
+        <p>Une erreur est survenue lors de la génération du document :</p>
+        <p class="text-red-500">${error.message || 'Erreur inconnue'}</p>
+      `;
+      window.agentUtils.addOrUpdateAgentChatMessage(errorMessage, processingMessageId, false);
+      
+      // Afficher l'erreur dans la section de l'agent Courriers
+      resultsContent.innerHTML = `<div class="text-red-500 p-4">${errorMessage}</div>`;
+      results.classList.remove('hidden');
+    } finally {
       // Réactiver le bouton de génération
       generateBtn.disabled = false;
       generateBtn.innerHTML = '<i class="fas fa-envelope mr-2"></i> Générer le document';
-      results.classList.remove('hidden');
-    }, 2000);
+    }
   });
   
   // Gestionnaire d'événement pour copier le document

@@ -64,14 +64,51 @@ document.addEventListener('DOMContentLoaded', function() {
     console.error("Bouton de paramètres non trouvé");
   }
   
+  // Écouteurs d'événements pour le bouton d'envoi
   if (sendMessageButton) {
-    console.log("Ajout de l'écouteur sur le bouton d'envoi de message");
+    console.log("Ajout de l'écouteur sur le bouton d'envoi");
     sendMessageButton.addEventListener('click', sendMessage);
   } else {
-    console.error("Bouton d'envoi de message non trouvé");
+    console.error("Bouton d'envoi non trouvé");
   }
   
-  // La gestion du bouton d'upload de fichiers a été déplacée dans le module file-uploader.js
+  // Écouteur pour le téléchargement de fichiers
+  const fileUploadInput = document.getElementById('file-upload');
+  
+  if (fileUploadInput) {
+    console.log("Ajout de l'écouteur sur l'input de téléchargement de fichiers");
+    
+    // Gestion du téléchargement de fichiers
+    fileUploadInput.addEventListener('change', (e) => {
+      const files = e.target.files;
+      if (files.length > 0) {
+        console.log(`${files.length} fichier(s) sélectionné(s)`);
+        // Appeler la fonction de gestion des fichiers
+        if (typeof window.handleFileUpload === 'function') {
+          window.handleFileUpload(files);
+        } else {
+          console.log("Fonction handleFileUpload non disponible");
+          // Afficher un aperçu simple des fichiers
+          const filePreview = document.getElementById('file-preview');
+          if (filePreview) {
+            filePreview.innerHTML = '';
+            filePreview.classList.remove('hidden');
+            
+            Array.from(files).forEach(file => {
+              const fileItem = document.createElement('div');
+              fileItem.className = 'p-2 bg-neutral-100 dark:bg-neutral-800 rounded mb-2 flex items-center';
+              fileItem.innerHTML = `
+                <i class="fas fa-file mr-2"></i>
+                <span class="text-sm">${file.name}</span>
+                <span class="text-xs text-neutral-500 ml-2">(${(file.size / 1024).toFixed(1)} KB)</span>
+              `;
+              filePreview.appendChild(fileItem);
+            });
+          }
+        }
+      }
+    });
+  }
   
   if (newChatButton) {
     console.log("Ajout de l'écouteur sur le bouton de nouvelle conversation");
@@ -93,20 +130,19 @@ document.addEventListener('DOMContentLoaded', function() {
   if (chatInput) {
     console.log("Ajout de l'écouteur sur le champ de saisie pour la touche Entrée");
     
-    // Supprimer les écouteurs existants pour éviter les doublons
-    chatInput.removeEventListener('keydown', handleChatInputKeydown);
-    
-    // Ajouter le nouvel écouteur
     chatInput.addEventListener('keydown', handleChatInputKeydown);
     
-    // Initialiser la hauteur du champ de saisie
-    chatInput.style.height = 'auto';
-    chatInput.style.height = (chatInput.scrollHeight) + 'px';
+    // Ajouter un placeholder pour contenteditable
+    chatInput.addEventListener('focus', function() {
+      if (this.innerHTML === '<p><br></p>' || this.innerHTML === '') {
+        this.innerHTML = '<p><br></p>';
+      }
+    });
     
-    // Ajouter un écouteur pour ajuster automatiquement la hauteur lors de la saisie
-    chatInput.addEventListener('input', () => {
-      chatInput.style.height = 'auto';
-      chatInput.style.height = (chatInput.scrollHeight) + 'px';
+    chatInput.addEventListener('blur', function() {
+      if (this.innerHTML === '<p><br></p>' || this.innerHTML.trim() === '') {
+        this.innerHTML = '<p><br></p>';
+      }
     });
   } else {
     console.error("Champ de saisie non trouvé");
@@ -116,21 +152,11 @@ document.addEventListener('DOMContentLoaded', function() {
   function handleChatInputKeydown(e) {
     if (e.key === 'Enter' && !e.shiftKey) {
       e.preventDefault();
-      console.log('Touche Entrée détectée, envoi du message...');
       sendMessage();
+      return false;
     }
-    
-    // Déclencheur pour tester les boutons d'action (appuyer sur F2)
-    if (e.key === 'F2') {
-      e.preventDefault();
-      console.log('Test des boutons d\'action déclenché...');
-      // Vérifier que la fonction existe avant de l'appeler
-      if (typeof testActionButtons === 'function') {
-        testActionButtons();
-      } else {
-        console.error("La fonction testActionButtons n'est pas définie");
-      }
-    }
+    // Pour contenteditable, pas besoin d'ajuster manuellement la hauteur
+    // car elle s'ajuste automatiquement
   }
   
   // Écouteurs d'événements pour les liens de navigation - avec vérification de sécurité
@@ -323,6 +349,18 @@ document.addEventListener('DOMContentLoaded', function() {
     
     console.log("Démarrage d'une nouvelle conversation...");
     
+    // Naviguer vers la vue de chat
+    if (typeof navigateTo === 'function') {
+      navigateTo('chat');
+    } else {
+      // Fallback si la fonction navigateTo n'est pas disponible
+      const dashboardView = document.getElementById('dashboard-view');
+      const chatView = document.getElementById('chat-view');
+      
+      if (dashboardView) dashboardView.style.display = 'none';
+      if (chatView) chatView.style.display = 'flex';
+    }
+    
     // Récupérer le conteneur des messages
     const chatMessages = document.getElementById('chat-messages');
     
@@ -368,8 +406,7 @@ document.addEventListener('DOMContentLoaded', function() {
     
     // Effacer le champ de saisie
     if (chatInput) {
-      chatInput.value = '';
-      chatInput.style.height = 'auto';
+      chatInput.innerHTML = '<p><br></p>';
       chatInput.focus();
     }
   }
@@ -386,22 +423,34 @@ document.addEventListener('DOMContentLoaded', function() {
       return;
     }
     
-    const message = chatInputElement.value.trim();
-    console.log(`Message: "${message}"`); 
+    // Pour un élément contenteditable, on récupère le texte avec innerText ou textContent
+    const message = chatInputElement.innerText.trim();
+    console.log(`Message: "${message}"`);
     
-    if (message) {
+    if (message && message !== '\n') {
       // Vider le champ de saisie
-      chatInputElement.value = '';
+      chatInputElement.innerHTML = '<p><br></p>';
       
+      // Vérifier s'il y a un fichier en attente
+      console.log("Vérification de la présence d'un fichier en attente:", window.pendingFile);
+      if (window.pendingFile && window.sendMessageWithFile && typeof window.sendMessageWithFile === 'function') {
+        console.log("Fichier en attente détecté, envoi avec instructions:", message);
+        // Si la fonction renvoie true, cela signifie qu'un fichier a été traité
+        const fileProcessed = window.sendMessageWithFile(message);
+        if (fileProcessed) {
+          console.log("Message envoyé avec fichier joint");
+          return; // Ne pas continuer avec le traitement normal du message
+        }
+      } else {
+        console.log("Aucun fichier en attente ou fonction sendMessageWithFile non disponible");
+      }
+      
+      // Si aucun fichier n'est en attente, traiter normalement le message
       // Ajouter le message à la conversation
       addUserMessage(message);
       
       // Traiter le message
       processUserMessage(message);
-      
-      // Ajuster la hauteur du champ de saisie
-      chatInputElement.style.height = 'auto';
-      chatInputElement.style.height = chatInputElement.scrollHeight + 'px';
     } else {
       console.log("Message vide, rien à envoyer");
     }
@@ -451,7 +500,8 @@ document.addEventListener('DOMContentLoaded', function() {
       actionsHTML = `
         <div class="mt-3 flex flex-wrap gap-2">
           ${actions.map(action => `
-            <button class="btn ${action.primary ? 'btn-primary' : 'btn-outline'} text-sm py-1" data-action="${action.id || ''}">
+            <button class="btn ${action.primary ? 'btn-primary' : 'btn-outline'} text-sm py-1" data-action="${action.id || ''}" 
+            ${action.data ? Object.entries(action.data).map(([key, value]) => `data-${key}="${value}"`).join(' ') : ''}>
               ${action.icon ? `<i class="fas fa-${action.icon} mr-1"></i>` : ''}
               ${action.text}
             </button>
@@ -484,9 +534,108 @@ document.addEventListener('DOMContentLoaded', function() {
         
         if (action && action.handler) {
           button.addEventListener('click', action.handler);
+        } else if (action) {
+          // Gérer les actions prédéfinies basées sur le type
+          switch (action.type) {
+            case 'open_window':
+              button.addEventListener('click', () => handleOpenWindow(action));
+              break;
+            case 'view_report':
+              button.addEventListener('click', () => handleViewReport(action));
+              break;
+            case 'download':
+              button.addEventListener('click', () => handleDownload(action));
+              break;
+            default:
+              console.log(`Type d'action non géré: ${action.type}`);
+          }
         }
       });
     }
+  }
+  
+  /**
+   * Gère l'action d'ouverture d'une fenêtre
+   * @param {Object} action - Action avec les propriétés nécessaires
+   */
+  function handleOpenWindow(action) {
+    if (!action.data || !action.data.path) {
+      console.error("Chemin de la fenêtre non spécifié");
+      return;
+    }
+    
+    console.log(`Ouverture de la fenêtre: ${action.data.path}`);
+    window.api.openExcelWindow(action.data.path)
+      .then(result => {
+        if (!result.success) {
+          console.error(`Erreur lors de l'ouverture de la fenêtre: ${result.error}`);
+          alert(`Erreur lors de l'ouverture de la fenêtre: ${result.error}`);
+        }
+      })
+      .catch(error => {
+        console.error("Erreur lors de l'ouverture de la fenêtre:", error);
+        alert(`Erreur lors de l'ouverture de la fenêtre: ${error.message || error}`);
+      });
+  }
+  
+  /**
+   * Gère l'action d'affichage d'un rapport Excel
+   * @param {Object} action - Action avec les propriétés nécessaires
+   */
+  function handleViewReport(action) {
+    if (!action.data || !action.data.report) {
+      console.error("Données du rapport non spécifiées");
+      return;
+    }
+    
+    console.log(`Affichage du rapport:`, action.data.report);
+    
+    // Ouvrir le rapport dans une fenêtre modale ou dans un panneau
+    if (window.excelReportViewer) {
+      const reportContainer = document.getElementById('report-container') || 
+                             document.createElement('div');
+      
+      if (!document.getElementById('report-container')) {
+        reportContainer.id = 'report-container';
+        reportContainer.className = 'p-4 bg-white dark:bg-neutral-800 rounded-lg shadow-lg';
+        document.body.appendChild(reportContainer);
+      }
+      
+      window.excelReportViewer.displayReport(action.data.report, 'report-container');
+    } else {
+      console.error("Le visualiseur de rapport Excel n'est pas disponible");
+      alert("Le visualiseur de rapport Excel n'est pas disponible");
+    }
+  }
+  
+  /**
+   * Gère l'action de téléchargement d'un fichier
+   * @param {Object} action - Action avec les propriétés nécessaires
+   */
+  function handleDownload(action) {
+    if (!action.data || !action.data.path) {
+      console.error("Chemin du fichier non spécifié");
+      return;
+    }
+    
+    console.log(`Téléchargement du fichier: ${action.data.path}`);
+    
+    // Utiliser l'API Electron pour télécharger le fichier
+    window.api.saveFile({
+      defaultPath: action.data.defaultName || 'rapport-excel.json',
+      filters: [{ name: 'Fichiers JSON', extensions: ['json'] }]
+    })
+    .then(savePath => {
+      if (savePath) {
+        // Ici, il faudrait implémenter la copie du fichier source vers savePath
+        // via une méthode IPC spécifique
+        console.log(`Fichier à sauvegarder à: ${savePath}`);
+      }
+    })
+    .catch(error => {
+      console.error("Erreur lors du téléchargement du fichier:", error);
+      alert(`Erreur lors du téléchargement du fichier: ${error.message || error}`);
+    });
   }
   
   // Fonction pour traiter un message utilisateur

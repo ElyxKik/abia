@@ -95,9 +95,25 @@ function handleNewChatClick(e) {
       });
   }
   
-  // 3. Naviguer vers la vue de chat (méthode directe sans dépendre d'autres modules)
-  dashboardView.classList.add('hidden');
-  chatView.style.display = 'flex';
+  // 3. Naviguer vers la vue de chat en utilisant la fonction de navigation existante
+  if (typeof navigateTo === 'function') {
+    navigateTo('chat');
+  } else {
+    // Fallback si la fonction navigateTo n'est pas disponible
+    dashboardView.style.display = 'none';
+    chatView.style.display = 'flex';
+    
+    // Mettre à jour les liens actifs dans la navigation
+    const navLinks = document.querySelectorAll('a[href^="#"]');
+    navLinks.forEach(link => {
+      const linkTarget = link.getAttribute('href').substring(1);
+      if (linkTarget === 'chat') {
+        link.classList.add('active');
+      } else {
+        link.classList.remove('active');
+      }
+    });
+  }
   
   // 4. Mettre à jour les liens de navigation
   const navLinks = document.querySelectorAll('a[href^="#"]');

@@ -1,10 +1,10 @@
-const DocumentService = require('../services/document-service');
+const documentService = require('../services/document-service');
 const fs = require('fs');
 const path = require('path');
 
 class MailAgent {
   constructor() {
-    this.documentService = new DocumentService();
+    this.documentService = documentService;
     this.initialized = false;
     this.templates = {
       'motivation': {

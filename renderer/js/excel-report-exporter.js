@@ -277,77 +277,156 @@ class ExcelReportExporter {
     const headerButtons = elementToPrint.querySelectorAll('.preview-header button, .preview-header .flex.space-x-2');
     headerButtons.forEach(el => el.remove());
 
-    // 2. Ensure the clone has a white background and is sized appropriately for A4.
-    //    html2canvas captures based on rendered styles.
-    elementToPrint.style.backgroundColor = 'white'; // Crucial for html2canvas
-    elementToPrint.style.width = '190mm'; // A4 width (210mm) minus 10mm margin on each side
-    elementToPrint.style.padding = '0'; // Reset padding if any from original sourceElement
-    elementToPrint.style.margin = '0';  // Reset margin
-    elementToPrint.style.boxSizing = 'border-box';
-    elementToPrint.style.overflow = 'visible'; // Ensure all content is visible
-
-    // Attempt to make all child backgrounds transparent unless explicitly set, to avoid black boxes
-    Array.from(elementToPrint.querySelectorAll('*')).forEach(el => {
-      const computedStyle = window.getComputedStyle(el);
-      // Only make transparent if it's the default body background or fully transparent already.
-      // This avoids overriding intentional background colors within the report.
-      if (computedStyle.backgroundColor === 'rgba(0, 0, 0, 0)' || computedStyle.backgroundColor === 'transparent') {
-        el.style.backgroundColor = 'transparent';
-      }
-    });
-    elementToPrint.style.backgroundColor = 'white'; // Re-assert for the main container
-
-
-    // Add the prepared clone to the body temporarily but off-screen for rendering by html2canvas
-    elementToPrint.style.position = 'absolute';
-    elementToPrint.style.left = '-9999px';
-    elementToPrint.style.top = '-9999px'; // Position off-screen
-    document.body.appendChild(elementToPrint);
     
-    // --- Configure html2pdf ---
-    const options = {
-      margin: 10, // Universal margin in mm
-      filename: `${fileName}.pdf`,
-      image: { type: 'jpeg', quality: 0.95 }, // JPEG can be better for photos/complex graphics
-      html2canvas: {
-        scale: 2, // Higher scale for better quality
-        useCORS: true, // If any images/resources are from other domains
-        logging: true, // <<<< ENABLED LOGGING for html2canvas debugging >>>>
-        letterRendering: true,
-        scrollX: -window.scrollX, // Account for page scroll if any
-        scrollY: -window.scrollY,
-        windowWidth: document.documentElement.offsetWidth, // try to use document width
-        windowHeight: document.documentElement.offsetHeight, // try to use document height
-        // Ensure charts (canvas elements) are captured. Default behavior should grab them.
-        // Adding a small delay before capture can sometimes help with complex rendering or animations.
-        // onrendered: function(canvas) { /* custom logic if needed */ }
-      },
-      jsPDF: {
-        unit: 'mm',
-        format: 'a4',
-        orientation: 'portrait'
-      },
-      // Attempt to avoid breaking elements across pages, especially the chart column
-      pagebreak: { mode: ['css', 'legacy'], avoid: ['.excel-report-preview .chart-column'] } 
-    };
-
-    // --- Generate PDF ---
-    html2pdf().set(options).from(elementToPrint).save()
-      .then(() => {
+    try {
+      // Cloner le conteneur pour éviter de modifier l'original
+      const elementToPrint = container.cloneNode(true);
+      
+      // Préparer les styles pour un rendu PDF propre
+      const styles = document.createElement('style');
+      styles.textContent = `
+        * { -webkit-print-color-adjust: exact !important; color-adjust: exact !important; print-color-adjust: exact !important; }
+        @page { size: A4; margin: 0; }
+        body { margin: 0; }
+        .excel-report-preview { box-shadow: none !important; max-width: 100% !important; }
+        .preview-header, .preview-content { padding: 12px; }
+        .chart-column { page-break-before: always; }
+        button { display: none !important; }
+        .markdown-column { overflow: visible !important; max-height: none !important; }
+      `;
+      elementToPrint.appendChild(styles);
+      
+      // Ajouter le clone préparé au body temporairement mais hors écran pour le rendu par html2canvas
+      elementToPrint.style.position = 'absolute';
+      elementToPrint.style.left = '-9999px';
+      elementToPrint.style.top = '-9999px';
+      elementToPrint.style.width = '800px'; // Largeur fixe pour éviter les problèmes de mise en page
+      document.body.appendChild(elementToPrint);
+      
+      // Utiliser html2canvas pour capturer le contenu
+      window.html2canvas(elementToPrint, {
+        scale: 2, // Échelle plus élevée pour une meilleure qualité
+        useCORS: true, // Si des images/ressources proviennent d'autres domaines
+        logging: false,
+        allowTaint: true,
+        backgroundColor: '#ffffff',
+        scrollX: 0,
+        scrollY: 0
+      }).then(canvas => {
+        // Créer un nouveau document PDF
+        const pdf = new window.jsPDF({
+          orientation: 'portrait',
+          unit: 'mm',
+          format: 'a4'
+        });
+        
+        // Calculer la largeur et la hauteur du PDF en mm
+        const pdfWidth = pdf.internal.pageSize.getWidth();
+        const pdfHeight = pdf.internal.pageSize.getHeight();
+        
+        // Calculer le ratio pour ajuster le canvas au format A4
+        const canvasWidth = canvas.width;
+        const canvasHeight = canvas.height;
+        
+        // Calculer la hauteur proportionnelle
+        const ratio = pdfWidth / canvasWidth;
+        const adjustedHeight = canvasHeight * ratio;
+        
+        // Si la hauteur ajustée est supérieure à la hauteur de la page, diviser en plusieurs pages
+        if (adjustedHeight > pdfHeight) {
+          let remainingHeight = canvasHeight;
+          let pageCanvas;
+          let position = 0;
+          let pageNum = 1;
+          
+          while (remainingHeight > 0) {
+            // Hauteur de chaque page en pixels du canvas
+            const pageHeight = Math.min(remainingHeight, (pdfHeight / ratio));
+            
+            // Créer un nouveau canvas pour la page
+            pageCanvas = document.createElement('canvas');
+            pageCanvas.width = canvasWidth;
+            pageCanvas.height = pageHeight;
+            
+            // Dessiner la partie correspondante du canvas original
+            const ctx = pageCanvas.getContext('2d');
+            ctx.fillStyle = '#ffffff';
+            ctx.fillRect(0, 0, pageCanvas.width, pageCanvas.height);
+            ctx.drawImage(canvas, 0, position, canvasWidth, pageHeight, 0, 0, canvasWidth, pageHeight);
+            
+            // Ajouter la page au PDF
+            const imgData = pageCanvas.toDataURL('image/jpeg', 1.0);
+            if (pageNum > 1) {
+              pdf.addPage();
+            }
+            pdf.addImage(imgData, 'JPEG', 0, 0, pdfWidth, pdfHeight * (pageHeight / (pdfHeight / ratio)));
+            
+            // Mettre à jour les variables pour la prochaine itération
+            remainingHeight -= pageHeight;
+            position += pageHeight;
+            pageNum++;
+          }
+        } else {
+          // Si tout tient sur une seule page
+          const imgData = canvas.toDataURL('image/jpeg', 1.0);
+          pdf.addImage(imgData, 'JPEG', 0, 0, pdfWidth, adjustedHeight);
+        }
+        
+        // Enregistrer le PDF
+        pdf.save(`${fileName}.pdf`);
         this._showToast('Rapport exporté au format PDF');
-      })
-      .catch(err => {
-        console.error('Erreur lors de l\'export PDF:', err);
-        this._showToast('Erreur lors de l\'export PDF: ' + (err.message || 'Inconnue'), 'error');
-      })
-      .finally(() => {
+      }).catch(err => {
+        console.error('Erreur lors de la capture HTML:', err);
+        this._showToast('Erreur lors de la génération du PDF: ' + (err.message || 'Capture HTML échouée'), 'error');
+      }).finally(() => {
+        // Nettoyer
         if (loadingToast && loadingToast.parentNode) {
           document.body.removeChild(loadingToast);
         }
-        if (elementToPrint && elementToPrint.parentNode) { // Clean up the cloned element
+        if (elementToPrint && elementToPrint.parentNode) {
           document.body.removeChild(elementToPrint);
         }
       });
+    } catch (error) {
+      console.error('Erreur lors de l\'export PDF:', error);
+      this._showToast('Erreur lors de l\'export PDF: ' + (error.message || 'Erreur inconnue'), 'error');
+      
+      if (loadingToast && loadingToast.parentNode) {
+        document.body.removeChild(loadingToast);
+      }
+    }
+  }
+  
+  /**
+   * Charge dynamiquement la bibliothèque jsPDF
+   * @param {Function} callback - Fonction à appeler après le chargement
+   * @private
+   */
+  _loadJsPdfDynamically(callback) {
+    const script = document.createElement('script');
+    script.src = 'https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js';
+    script.onload = callback;
+    script.onerror = () => {
+      console.error('Impossible de charger jsPDF');
+      this._showToast('Impossible de charger jsPDF', 'error');
+    };
+    document.head.appendChild(script);
+  }
+  
+  /**
+   * Charge dynamiquement la bibliothèque html2canvas
+   * @param {Function} callback - Fonction à appeler après le chargement
+   * @private
+   */
+  _loadHtml2CanvasDynamically(callback) {
+    const script = document.createElement('script');
+    script.src = 'https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js';
+    script.onload = callback;
+    script.onerror = () => {
+      console.error('Impossible de charger html2canvas');
+      this._showToast('Impossible de charger html2canvas', 'error');
+    };
+    document.head.appendChild(script);
   }
 
   // Helper to create loading toast (can be part of the class or a standalone utility)

@@ -7,6 +7,15 @@ const docx = require('docx');
 const { spawn } = require('child_process');
 const { PythonShell } = require('python-shell');
 
+// Importer le service Excel-LLM une seule fois au niveau du module
+let excelLLMService = null;
+try {
+  excelLLMService = require('./excel-llm-service');
+  console.log('Service Excel-LLM chargé avec succès');
+} catch (error) {
+  console.error('Erreur lors du chargement du service Excel-LLM:', error);
+}
+
 // Gestion sécurisée de l'import d'Electron
 let electronApp = null;
 try {
@@ -380,12 +389,52 @@ if __name__ == "__main__":
         console.error(`Erreur avec xlsx-populate: ${xlsxError.message}`);
         console.log('Tentative de fallback vers ExcelJS...');
         try {
+          // Essayer d'abord avec ExcelJS
           return await this._analyzeExcelWithExcelJS(filePath);
         } catch (excelJSError) {
           console.error(`Erreur avec ExcelJS: ${excelJSError.message}`);
-          // Vérifier si l'erreur est liée à la structure ZIP
-          if (excelJSError.message.includes('central directory') || excelJSError.message.includes('zip')) {
-            throw new Error('Format de fichier Excel non reconnu. Le fichier semble corrompu ou ne pas être un fichier Excel valide. Essayez de le réenregistrer au format .xlsx ou .csv.');
+          
+          // Vérifier si l'erreur est liée à la structure ZIP ou au format du fichier
+          if (excelJSError.message.includes('central directory') || 
+              excelJSError.message.includes('zip') || 
+              excelJSError.message.includes('invalid') || 
+              excelJSError.message.includes('corrupt')) {
+            
+            // Essayer d'utiliser notre service Python comme solution de secours
+            try {
+              console.log('Tentative de récupération du fichier Excel avec le service Python...');
+              const excelLLMService = require('./excel-llm-service');
+              
+              // Vérifier si le service est disponible
+              if (excelLLMService && typeof excelLLMService.extractExcelData === 'function') {
+                const options = {
+                  maxRows: 100,
+                  maxCols: 20,
+                  formatType: 'json',
+                  includeHeaders: true
+                };
+                
+                const result = await excelLLMService.extractExcelData(filePath, options);
+                
+                if (result.error) {
+                  throw new Error(result.error);
+                }
+                
+                console.log('Récupération réussie avec le service Python');
+                return {
+                  fileName: result.fileName,
+                  sheetName: result.sheetName || 'Feuille1',
+                  rowCount: result.rowCount || 0,
+                  columnCount: result.columnCount || 0,
+                  data: result.data || []
+                };
+              } else {
+                throw new Error('Service de récupération non disponible');
+              }
+            } catch (pythonError) {
+              console.error('Erreur lors de la tentative de récupération avec Python:', pythonError);
+              throw new Error('Format de fichier Excel non reconnu ou corrompu. Essayez de le réenregistrer au format .xlsx ou .csv, ou de vérifier que le fichier n\'est pas endommagé.');
+            }
           } else {
             throw new Error(`Erreur lors de l'analyse Excel avec ExcelJS: ${excelJSError.message}`);
           }
@@ -547,6 +596,75 @@ if __name__ == "__main__":
       throw error;
     }
   }
+  
+  /**
+   * Traite un fichier Excel avec un modèle LLM
+   * @param {string} filePath - Chemin du fichier Excel
+   * @param {string} instructions - Instructions pour le modèle LLM
+   * @param {Object} options - Options pour l'extraction et l'API LLM
+   * @returns {Promise<Object>} - Réponse du modèle LLM
+   */
+  async processExcelWithLLM(filePath, instructions, options = {}) {
+    console.log(`Traitement du fichier Excel avec LLM: ${filePath}`);
+    console.log(`Instructions: ${instructions}`);
+    
+    // Valider le fichier avant de l'analyser
+    if (!this._validateExcelFile(filePath)) {
+      throw new Error(`Le fichier ${filePath} n'est pas un fichier Excel valide.`);
+    }
+    
+    try {
+      // Vérifier que le service Excel-LLM est disponible
+      if (!excelLLMService) {
+        throw new Error('Le service Excel-LLM n\'est pas disponible');
+      }
+      
+      // Désactiver le traitement Python par défaut pour l'instant
+      const pythonOptions = { ...options, usePython: true };
+      
+      // Utiliser le service Excel-LLM pour traiter le fichier
+      const result = await excelLLMService.processExcelWithLLM(filePath, instructions, pythonOptions);
+      return result;
+    } catch (error) {
+      console.error('Erreur lors du traitement du fichier Excel avec LLM:', error);
+      throw error;
+    }
+  }
+  
+  /**
+   * Extrait les données d'un fichier Excel pour les envoyer à un LLM
+   * @param {string} filePath - Chemin du fichier Excel
+   * @param {Object} options - Options d'extraction
+   * @returns {Promise<Object>} - Données formatées pour le LLM
+   */
+  async extractExcelDataForLLM(filePath, options = {}) {
+    console.log(`Extraction des données Excel pour LLM: ${filePath}`);
+    
+    // Valider le fichier avant de l'analyser
+    if (!this._validateExcelFile(filePath)) {
+      throw new Error(`Le fichier ${filePath} n'est pas un fichier Excel valide.`);
+    }
+    
+    try {
+      // Vérifier que le service Excel-LLM est disponible
+      if (!excelLLMService) {
+        throw new Error('Le service Excel-LLM n\'est pas disponible');
+      }
+      
+      // Désactiver le traitement Python par défaut pour l'instant
+      const pythonOptions = { ...options, usePython: true };
+      
+      // Utiliser le service Excel-LLM pour extraire les données
+      const result = await excelLLMService.extractExcelData(filePath, pythonOptions);
+      return result;
+    } catch (error) {
+      console.error('Erreur lors de l\'extraction des données Excel pour LLM:', error);
+      throw error;
+    }
+  }
 }
 
-module.exports = DocumentService;
+
+// Créer et exporter une instance du service
+const documentService = new DocumentService();
+module.exports = documentService;

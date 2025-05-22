@@ -13,15 +13,33 @@ from openpyxl import load_workbook
 import xlrd
 import traceback
 
-def process_excel_file(file_path, max_rows=100, max_cols=20, format_type='markdown', sheet_index=0):
+def convert_sections_to_array(sections_dict):
+    """
+    Convertit un dictionnaire de sections en tableau pour compatibilité avec le visualiseur JavaScript
+    
+    Args:
+        sections_dict (dict): Dictionnaire de sections avec clé=titre et valeur=contenu
+        
+    Returns:
+        list: Tableau de sections au format attendu par le visualiseur
+    """
+    sections_array = []
+    for section_name, section_content in sections_dict.items():
+        sections_array.append({
+            "title": section_name,
+            "content": section_content
+        })
+    return sections_array
+
+def process_excel_file(file_path, format_type='markdown', max_rows=100, max_cols=20, sheet_index=0):
     """
     Traite un fichier Excel et extrait les données dans le format spécifié.
     
     Args:
         file_path (str): Chemin vers le fichier Excel
+        format_type (str): Format de sortie ('json', 'markdown', 'csv', 'text')
         max_rows (int): Nombre maximum de lignes à extraire
         max_cols (int): Nombre maximum de colonnes à extraire
-        format_type (str): Format de sortie ('json', 'markdown', 'csv', 'text')
         sheet_index (int): Index de la feuille à traiter (0 = première feuille)
         
     Returns:
@@ -63,7 +81,7 @@ def process_excel_file(file_path, max_rows=100, max_cols=20, format_type='markdo
                                         sheet_names = ["Recovered Data"]
                                         sheet_count = 1
                                         sheet_index = 0
-                                        print(f"Fichier Excel corrompu, lu comme CSV: {file_path}")
+                                        print(f"Fichier Excel corrompu, lu comme CSV: {file_path}", file=sys.stderr)
                                     except:
                                         # Si cela échoue également, réessayer avec xlrd comme dernier recours
                                         try:
@@ -87,7 +105,7 @@ def process_excel_file(file_path, max_rows=100, max_cols=20, format_type='markdo
                                         sheet_names = ["Recovered Data"]
                                         sheet_count = 1
                                         sheet_index = 0
-                                        print(f"Fichier Excel corrompu, lu comme CSV: {file_path}")
+                                        print(f"Fichier Excel corrompu, lu comme CSV: {file_path}", file=sys.stderr)
                                     except:
                                         return {"error": f"Format de fichier Excel non reconnu ou corrompu. Essayez de le réenregistrer au format .xlsx ou .csv. Détails: {str(xlrd_error)}"}
                                 else:
@@ -111,7 +129,22 @@ def process_excel_file(file_path, max_rows=100, max_cols=20, format_type='markdo
                         try:
                             # Charger la feuille spécifiée avec pandas, en spécifiant le moteur
                             df = pd.read_excel(file_path, sheet_name=sheet_index, nrows=max_rows, engine=engine)
+                        except ValueError as ve:
+                            if "'nrows' must be an integer >=0" in str(ve) and engine == 'xlrd':
+                                sheet_name_to_read = sheet_names[sheet_index] if sheet_index < len(sheet_names) else sheet_index
+                                print(f"Avertissement: La lecture partielle (avec nrows) du fichier .xls '{file_path}' (feuille: {sheet_name_to_read}) a échoué avec xlrd. Tentative de lecture complète puis sélection des premières {max_rows} lignes.", file=sys.stderr)
+                                try:
+                                    df_full = pd.read_excel(file_path, sheet_name=sheet_index, engine=engine)
+                                    df = df_full.head(max_rows)
+                                    print(f"Lecture complète et sélection des {len(df)} premières lignes réussies pour '{file_path}'.", file=sys.stderr)
+                                except Exception as e_fallback:
+                                    print(f"Erreur lors de la tentative de lecture complète du fichier Excel '{file_path}' après l'échec de nrows: {str(e_fallback)}", file=sys.stderr)
+                                    return {"error": f"Impossible de lire le contenu du fichier Excel. Le fichier pourrait être corrompu. Détails (fallback xlrd): {str(e_fallback)}"}
+                            else:
+                                print(f"Erreur pandas (ValueError non gérée spécifiquement ou moteur autre que xlrd): {str(ve)} pour {file_path}", file=sys.stderr)
+                                return {"error": f"Erreur lors de la lecture du fichier Excel avec pandas. Détails: {str(ve)}"}
                         except Exception as pd_error:
+                            print(f"Erreur pandas (générique) lors de la lecture de '{file_path}': {str(pd_error)}", file=sys.stderr)
                             # Essayer une dernière fois avec des options plus permissives
                             try:
                                 if engine == 'openpyxl':
@@ -119,12 +152,11 @@ def process_excel_file(file_path, max_rows=100, max_cols=20, format_type='markdo
                                     df = pd.read_excel(file_path, sheet_name=sheet_index, nrows=max_rows, engine=engine, 
                                                       keep_default_na=True, na_values=['NA'], convert_float=True)
                                 else:
-                                    # Pour les fichiers XLS, essayer avec des options plus permissives
-                                    df = pd.read_excel(file_path, sheet_name=sheet_index, nrows=max_rows, engine=engine,
-                                                      keep_default_na=True, na_values=['NA'])
-                            except Exception as final_error:
-                                return {"error": f"Impossible de lire le contenu du fichier Excel. Le fichier pourrait être corrompu ou dans un format non standard. Détails: {str(final_error)}"}
-
+                                    # Pour les autres formats (ou si le moteur n'est pas openpyxl), relancer l'erreur originale
+                                    # car la logique de fallback spécifique à openpyxl ne s'applique pas.
+                                    return {"error": f"Impossible de lire le contenu du fichier Excel. Le fichier pourrait être corrompu ou dans un format non supporté. Détails: {str(pd_error)}"}
+                            except Exception as final_read_error:
+                                return {"error": f"Impossible de lire le contenu du fichier Excel même avec des options permissives. Le fichier pourrait être sévèrement corrompu. Détails: {str(final_read_error)}"}
                 
                 # Limiter le nombre de colonnes
                 if len(df.columns) > max_cols:
@@ -179,17 +211,27 @@ def process_excel_file(file_path, max_rows=100, max_cols=20, format_type='markdo
         traceback.print_exc()
         return {"error": error_msg}
 
-def generate_structured_report(data, instructions=""):
+def generate_structured_report(data, instructions=None, llm_analysis=None):
     """
-    Génère un rapport structuré au format JSON à partir des données Excel.
+    Génère un rapport structuré au format JSON à partir des données Excel
     
     Args:
-        data (dict): Données extraites d'un fichier Excel
+        data (dict): Données Excel extraites
         instructions (str): Instructions spécifiques pour l'analyse
+        llm_analysis (str): Analyse LLM précédemment générée (optionnel)
         
     Returns:
         dict: Rapport structuré au format JSON
     """
+    
+    # Vérifier et initialiser les paramètres
+    if llm_analysis is None:
+        llm_analysis = ""
+        print("Aucune analyse LLM fournie, génération d'un rapport standard", file=sys.stderr)
+    
+    # S'assurer que instructions est une chaîne
+    if instructions is None:
+        instructions = ""
     try:
         # Extraire les métadonnées du fichier
         file_info = {
@@ -217,7 +259,7 @@ def generate_structured_report(data, instructions=""):
                                         nrows=data.get("rowCount", 100), engine=engine)
                 df = df_temp.replace({np.nan: None})
             except Exception as e:
-                print(f"Erreur lors de la conversion des données markdown en DataFrame: {str(e)}")
+                print(f"Erreur lors de la conversion des données markdown en DataFrame: {str(e)}", file=sys.stderr)
         
         if df is not None:
             # Identifier les colonnes numériques
@@ -290,18 +332,197 @@ def generate_structured_report(data, instructions=""):
                 if len(numeric_cols) >= 2:
                     calculs_exemple[f"Rapport {numeric_cols[0]}/{numeric_cols[1]}"] = f"Formule: {numeric_cols[0]} / {numeric_cols[1]}"
         
-        # Créer le rapport structuré
-        report = {
-            "fichier": file_info,
-            "sections": sections,
-            "recommandations": recommandations,
-            "calculs_exemple": calculs_exemple
-        }
-        
-        return report
-    
+        # Intégrer l'analyse LLM si disponible
+        if llm_analysis and isinstance(llm_analysis, str) and llm_analysis.strip():
+            print(f"Intégration de l'analyse LLM dans le rapport structuré", file=sys.stderr)
+            
+            # Déterminer si l'analyse LLM contient du JSON
+            llm_sections = []
+            llm_recommendations = []
+            llm_title = None
+            llm_summary = None
+            
+            try:
+                # Essayer d'extraire du JSON de l'analyse LLM
+                if '{' in llm_analysis and '}' in llm_analysis:
+                    # Recherche de structures JSON valides dans la réponse LLM
+                    import re
+                    import json
+                    
+                    # Rechercher les blocs JSON potentiels
+                    json_matches = re.findall(r'\{[^{}]*((\{[^{}]*\})[^{}]*)*\}', llm_analysis)
+                    for potential_json, _ in json_matches:
+                        try:
+                            json_data = json.loads(potential_json)
+                            if isinstance(json_data, dict):
+                                if 'title' in json_data or 'titre' in json_data:
+                                    llm_title = json_data.get('title') or json_data.get('titre')
+                                
+                                if 'summary' in json_data or 'resume' in json_data:
+                                    llm_summary = json_data.get('summary') or json_data.get('resume')
+                                
+                                # Extraction des sections 
+                                llm_json_sections = json_data.get('sections', [])
+                                if isinstance(llm_json_sections, list):
+                                    for section in llm_json_sections:
+                                        if isinstance(section, dict):
+                                            title = section.get('title') or section.get('titre') or 'Section sans titre'
+                                            content = section.get('content') or section.get('contenu') or ''
+                                            llm_sections.append({'titre': title, 'contenu': content})
+                                elif isinstance(llm_json_sections, dict):
+                                    for title, content in llm_json_sections.items():
+                                        llm_sections.append({'titre': title, 'contenu': content if isinstance(content, str) else str(content)})
+                                
+                                # Extraction des recommandations
+                                recommendations = json_data.get('recommendations') or json_data.get('recommandations') or []
+                                if isinstance(recommendations, list):
+                                    for rec in recommendations:
+                                        if isinstance(rec, str):
+                                            llm_recommendations.append(rec)
+                                        elif isinstance(rec, dict) and ('text' in rec or 'texte' in rec):
+                                            llm_recommendations.append(rec.get('text') or rec.get('texte'))
+                            break  # Utiliser le premier JSON valide trouvé
+                        except json.JSONDecodeError:
+                            continue
+                
+                # Si aucun JSON valide n'a été trouvé, extraire les sections par analyse de texte
+                if not llm_sections:
+                    # Détecter les sections par titres
+                    import re
+                    section_pattern = r'\n\s*(\d+\.\s*|#{1,3}\s*|\*\*\s*)?([A-Z][^\n\.:]+)(?:\:|\n)'  
+                    section_matches = re.findall(section_pattern, '\n' + llm_analysis)
+                    
+                    if section_matches:
+                        prev_end = 0
+                        for i, (prefix, title) in enumerate(section_matches):
+                            title = title.strip()
+                            # Déterminer le début et la fin de la section actuelle
+                            start_pos = llm_analysis.find(title, prev_end)
+                            if start_pos != -1:
+                                end_pos = len(llm_analysis)
+                                if i < len(section_matches) - 1:
+                                    next_title = section_matches[i+1][1].strip()
+                                    next_pos = llm_analysis.find(next_title, start_pos + len(title))
+                                    if next_pos != -1:
+                                        end_pos = next_pos
+                                
+                                # Extraire le contenu de la section
+                                section_text = llm_analysis[start_pos + len(title):end_pos].strip()
+                                # Nettoyer le début du texte qui peut contenir des caractères de formatage
+                                section_text = section_text.lstrip(':\n- *')
+                                
+                                llm_sections.append({
+                                    'titre': title,
+                                    'contenu': section_text
+                                })
+                                
+                                prev_end = end_pos
+                    
+                    # Si aucune section n'a été détectée, créer une section générale
+                    if not llm_sections:
+                        llm_sections.append({
+                            'titre': 'Analyse générale',
+                            'contenu': llm_analysis
+                        })
+                
+                # Extraire des recommandations si pas encore fait
+                if not llm_recommendations:
+                    recommendation_patterns = [
+                        r'(?:Recommandation|Recommendation)[s]?\s*:?\s*\n+((?:\s*-\s*[^\n]+\n*)+)',
+                        r'(?:Conseil|Conseils|Suggestion|Suggestions)\s*:?\s*\n+((?:\s*-\s*[^\n]+\n*)+)',
+                        r'(?:Je recommande|Je suggère)\s*:?\s*\n+((?:\s*-\s*[^\n]+\n*)+)'
+                    ]
+                    
+                    for pattern in recommendation_patterns:
+                        matches = re.search(pattern, llm_analysis, re.IGNORECASE)
+                        if matches:
+                            rec_text = matches.group(1)
+                            rec_items = re.findall(r'\s*-\s*([^\n]+)', rec_text)
+                            llm_recommendations.extend(rec_items)
+                            break
+            except Exception as e:
+                print(f"Erreur lors de l'analyse de la réponse LLM: {str(e)}", file=sys.stderr)
+            
+            # Intégrer les résultats de l'analyse LLM dans le rapport final
+            report_sections = {}
+            
+            # Combiner les sections détectées automatiquement avec celles du LLM
+            if llm_sections:
+                # Utiliser les sections du LLM comme base et ajouter celles détectées automatiquement
+                for section in llm_sections:
+                    section_title = section['titre']
+                    section_content = section['contenu']
+                    report_sections[section_title] = section_content
+            
+            # Ajouter les sections détectées automatiquement si elles ne sont pas déjà présentes
+            for section_title, section_content in sections.items():
+                if section_title not in report_sections:
+                    report_sections[section_title] = section_content
+            
+            # Combiner les recommandations
+            combined_recommendations = llm_recommendations + [rec for rec in recommandations if rec not in llm_recommendations]
     except Exception as e:
-        print(f"Erreur lors de la génération du rapport structuré: {str(e)}")
+        print(f"Erreur lors de l'analyse de la réponse LLM: {str(e)}", file=sys.stderr)
+    
+    # Générer le rapport final
+    try:
+        # Intégrer les résultats de l'analyse LLM dans le rapport final
+        report_sections = {}
+
+        # Combiner les sections détectées automatiquement avec celles du LLM
+        if llm_sections:
+            # Utiliser les sections du LLM comme base et ajouter celles détectées automatiquement
+            for section in llm_sections:
+                section_title = section['titre']
+                section_content = section['contenu']
+                report_sections[section_title] = section_content
+
+            # Ajouter les sections détectées automatiquement si elles ne sont pas déjà présentes
+            for section_title, section_content in sections.items():
+                if section_title not in report_sections:
+                    report_sections[section_title] = section_content
+
+            # Combiner les recommandations
+            combined_recommendations = llm_recommendations + [rec for rec in recommandations if rec not in llm_recommendations]
+
+            # Créer le rapport structuré enrichi par le LLM
+            sections_array = []
+            for section_name, section_content in report_sections.items():
+                sections_array.append({
+                    "title": section_name,
+                    "content": section_content
+                })
+
+            report = {
+                "titre": llm_title or "Rapport d'analyse Excel",
+                "fichier": file_info,
+                "resume": llm_summary or "Analyse détaillée du fichier Excel avec extraction des points clés",
+                "sections": sections_array,  # Utiliser le tableau au lieu du dictionnaire
+                "recommandations": combined_recommendations,
+                "calculs_exemple": calculs_exemple
+            }
+        else:
+            # Créer le rapport structuré standard (sans LLM)
+            sections_array = []
+            for section_name, section_content in sections.items():
+                sections_array.append({
+                    "title": section_name,
+                    "content": section_content
+                })
+
+            report = {
+                "titre": "Rapport d'analyse Excel",
+                "fichier": file_info,
+                "resume": "Analyse de base des données Excel",
+                "sections": sections_array,  # Utiliser le tableau au lieu du dictionnaire
+                "recommandations": recommandations,
+                "calculs_exemple": calculs_exemple
+            }
+
+        return report
+
+    except Exception as e:
+        print(f"Erreur lors de la génération du rapport structuré: {str(e)}", file=sys.stderr)
         traceback.print_exc()
         return {
             "fichier": {
@@ -309,7 +530,7 @@ def generate_structured_report(data, instructions=""):
                 "feuille": data.get("sheetName", ""),
                 "dimensions": f"{data.get('rowCount', 0)} lignes × {data.get('columnCount', 0)} colonnes"
             },
-            "sections": {},
+            "sections": [],
             "recommandations": ["Vérifier le format des données", "Analyser manuellement le contenu du fichier"],
             "calculs_exemple": {}
         }
@@ -481,55 +702,99 @@ def main():
     Point d'entrée principal du script lorsqu'il est exécuté directement.
     Attend un chemin de fichier Excel et des options en arguments.
     """
-    if len(sys.argv) < 2:
-        print(json.dumps({"error": "Veuillez spécifier un chemin de fichier Excel"}))
+    if len(sys.argv) < 6:
+        print(json.dumps({"error": "Arguments insuffisants. Usage: python excel_processor.py <file_path> <format> <max_rows> <max_cols> <sheet_index> [instructions]"}));
         sys.exit(1)
         
     file_path = sys.argv[1]
-    format_type = sys.argv[2] if len(sys.argv) > 2 else 'json'
-    max_rows = int(sys.argv[3]) if len(sys.argv) > 3 else 100
-    max_cols = int(sys.argv[4]) if len(sys.argv) > 4 else 20
-    sheet_index = int(sys.argv[5]) if len(sys.argv) > 5 else 0
+    format_type = sys.argv[2]
+    max_rows = int(sys.argv[3])
+    max_cols = int(sys.argv[4])
+    sheet_index = int(sys.argv[5])
     
     try:
         # Traiter le fichier Excel
-        result = process_excel_file(file_path, max_rows, max_cols, format_type, sheet_index)
+        # Respecter l'ordre des paramètres défini dans la signature de la fonction
+        result = process_excel_file(file_path, format_type, max_rows, max_cols, sheet_index)
         
-        # Stocker le chemin du fichier et l'index de la feuille pour une utilisation ultérieure
-        result["_file_path"] = file_path
-        result["_sheet_index"] = sheet_index
-        
-        # Vérifier s'il faut générer un rapport structuré
+        # Initialiser les variables pour les arguments complémentaires
         generate_report = False
         instructions = ""
+        llm_analysis = None  # Initialiser explicitement
         
-        if len(sys.argv) > 6:
-            if sys.argv[6] == "--structured-report":
+        # Traiter les arguments complémentaires
+        i = 6
+        while i < len(sys.argv):
+            arg = sys.argv[i]
+            
+            if arg == "--structured-report":
                 generate_report = True
-                instructions = sys.argv[7] if len(sys.argv) > 7 else ""
+                i += 1
+                if i < len(sys.argv) and not sys.argv[i].startswith("--"):
+                    instructions = sys.argv[i]
+                    i += 1
+            elif arg == "--llm-analysis":
+                i += 1
+                if i < len(sys.argv):
+                    llm_analysis_file = sys.argv[i]
+                    # Lire l'analyse LLM depuis le fichier temporaire
+                    try:
+                        if os.path.exists(llm_analysis_file):
+                            with open(llm_analysis_file, 'r') as f:
+                                llm_analysis = f.read()
+                                print(f"Analyse LLM lue depuis le fichier temporaire: {llm_analysis_file}", file=sys.stderr)
+                        else:
+                            print(f"Fichier d'analyse LLM introuvable: {llm_analysis_file}", file=sys.stderr)
+                    except Exception as e:
+                        print(f"Erreur lors de la lecture du fichier d'analyse LLM: {str(e)}", file=sys.stderr)
+                    i += 1
+            elif not arg.startswith("--") and instructions == "":
+                # Pour compatibilité avec l'ancien format
+                instructions = arg
+                i += 1
             else:
-                instructions = sys.argv[6]
+                i += 1
         
         if generate_report:
             # Générer un rapport structuré au format JSON
-            structured_report = generate_structured_report(result, instructions)
-            result["structured_report"] = structured_report
+            print(f"Génération d'un rapport structuré {'avec analyse LLM' if llm_analysis else 'sans analyse LLM'}", file=sys.stderr)
+            try:
+                # Passer explicitement les arguments pour éviter les erreurs de référence
+                structured_report = generate_structured_report(
+                    data=result, 
+                    instructions=instructions if instructions else "", 
+                    llm_analysis=llm_analysis if llm_analysis else None
+                )
+                result["structured_report"] = structured_report
+            except Exception as e:
+                print(f"Erreur lors de la génération du rapport structuré: {str(e)}", file=sys.stderr)
+                # Générer un rapport basique sans analyse LLM en cas d'erreur
+                structured_report = generate_structured_report(result, instructions, None)
+                result["structured_report"] = structured_report
         elif instructions:  # Si des instructions sont fournies, formater le prompt pour DeepSeek
             prompt = format_prompt_for_deepseek(result, instructions)
             result["prompt"] = prompt
         
         # Supprimer les champs internes avant de retourner le résultat
-        if "_file_path" in result:
-            del result["_file_path"]
-        if "_sheet_index" in result:
-            del result["_sheet_index"]
-        
-        # Retourner le résultat en JSON
+        result.pop("_file_path", None)
+        result.pop("_sheet_index", None)
+
+        # Imprimer le résultat au format JSON sur stdout
         print(json.dumps(result))
+
     except Exception as e:
-        error_msg = f"Erreur lors du traitement du fichier Excel: {str(e)}"
-        print(json.dumps({"error": error_msg}))
-        traceback.print_exc()
+        # Capturer toute exception non gérée dans main() et la retourner comme JSON
+        print(json.dumps({"error": f"Erreur inattendue dans l'exécution du script Python: {str(e)}"}))
+        # Optionnel: logguer l'erreur complète sur stderr pour le débogage côté serveur
+        import traceback
+        print(f"Traceback de l'erreur inattendue: {traceback.format_exc()}", file=sys.stderr)
 
 if __name__ == "__main__":
-    main()
+    try:
+        main()
+    except Exception as e:
+        # Capturer toute exception non gérée dans main() et la retourner comme JSON
+        print(json.dumps({"error": f"Erreur inattendue dans l'exécution du script Python: {str(e)}"}))
+        # Optionnel: logguer l'erreur complète sur stderr pour le débogage côté serveur
+        import traceback
+        print(f"Traceback de l'erreur inattendue: {traceback.format_exc()}", file=sys.stderr)

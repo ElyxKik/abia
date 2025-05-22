@@ -3,6 +3,8 @@ const ExcelAgent = require('./ExcelAgent');
 const MailAgent = require('./MailAgent');
 const ChatAgent = require('./ChatAgent');
 const FileSystemAgent = require('./FileSystemAgent');
+const TranslationAgent = require('./TranslationAgent');
+const TaskAgent = require('./TaskAgent');
 const MemoryService = require('../services/memory-service');
 
 /**
@@ -16,6 +18,8 @@ class MainAgent {
     this.mailAgent = new MailAgent();
     this.chatAgent = new ChatAgent();
     this.fileSystemAgent = new FileSystemAgent();
+    this.translationAgent = new TranslationAgent();
+    this.taskAgent = new TaskAgent();
     this.memoryService = MemoryService;
     this.activeAgent = null;
     this.activeAgentType = null;
@@ -46,6 +50,8 @@ class MainAgent {
         this.mailAgent.initialize(),
         this.chatAgent.initialize(),
         this.fileSystemAgent.initialize(),
+        this.translationAgent.initialize(),
+        this.taskAgent.initialize(),
         memoryPromise
       ];
       
@@ -88,6 +94,12 @@ class MainAgent {
         case 'fichier':
         case 'dossier':
           this.activeAgent = this.fileSystemAgent;
+          break;
+        case 'translation':
+          this.activeAgent = this.translationAgent;
+          break;
+        case 'task':
+          this.activeAgent = this.taskAgent;
           break;
         default:
           throw new Error(`Type d'agent non reconnu: ${agentType}`);
@@ -186,6 +198,22 @@ class MainAgent {
       /objet\s+(?:du|de)\s+(?:mail|message)/i
     ];
     
+    // Patterns pour l'agent Translation
+    const translationPatterns = [
+      /traduire\s+(?:du|le)\s+(?:texte|document)/i,
+      /traduction\s+(?:de|du)\s+(?:texte|document)/i,
+      /traduire\s+(?:un|ce|le)\s+(?:mot|phrase)/i
+    ];
+    
+    // Patterns pour l'agent Task
+    const taskPatterns = [
+      /créer\s+(?:une|un)\s+tâche/i,
+      /ajouter\s+(?:une|un)\s+tâche/i,
+      /supprimer\s+(?:une|un)\s+tâche/i,
+      /liste\s+(?:des|les)\s+tâches/i,
+      /voir\s+(?:les\s+)?tâches/i
+    ];
+    
     // Vérifier les patterns pour chaque agent
     // L'ordre de vérification est important (du plus spécifique au plus général)
     
@@ -229,6 +257,26 @@ class MainAgent {
       }
     }
     
+    // Vérifier les patterns Translation si aucun résultat n'a été trouvé
+    if (!result) {
+      for (const pattern of translationPatterns) {
+        if (pattern.test(contentLower)) {
+          result = 'translation';
+          break;
+        }
+      }
+    }
+    
+    // Vérifier les patterns Task si aucun résultat n'a été trouvé
+    if (!result) {
+      for (const pattern of taskPatterns) {
+        if (pattern.test(contentLower)) {
+          result = 'task';
+          break;
+        }
+      }
+    }
+    
     // Si aucun pattern spécifique n'est détecté, utiliser l'analyse par mots-clés comme fallback
     if (!result) {
       const keywords = {
@@ -236,7 +284,9 @@ class MainAgent {
         excel: ['excel', 'tableau', 'données', 'graphique', 'cellule', 'feuille'],
         mail: ['email', 'mail', 'message', 'envoyer', 'destinataire', 'objet'],
         chat: ['discuter', 'parler', 'question', 'répondre', 'aide'],
-        filesystem: ['dossier', 'fichier', 'créer', 'supprimer', 'classer', 'organiser', 'ranger', 'déplacer', 'liste', 'répertoire', 'classification']
+        filesystem: ['dossier', 'fichier', 'créer', 'supprimer', 'classer', 'organiser', 'ranger', 'déplacer', 'liste', 'répertoire', 'classification'],
+        translation: ['traduire', 'traduction', 'langue'],
+        task: ['tâche', 'liste', 'ajouter', 'supprimer', 'voir']
       };
       
       let maxScore = 0;
@@ -397,6 +447,12 @@ class MainAgent {
             type: 'filesystem'
           };
         }
+      } else if (this.activeAgentType === 'translation') {
+        // Traiter la requête de traduction
+        response = await this.translationAgent.translate(normalizedQuery, enhancedContext);
+      } else if (this.activeAgentType === 'task') {
+        // Traiter la requête de tâche
+        response = await this.taskAgent.processTask(normalizedQuery, enhancedContext);
       } else {
         // Fallback pour les agents non reconnus
         response = {

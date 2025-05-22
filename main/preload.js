@@ -32,6 +32,10 @@ contextBridge.exposeInMainWorld('api', {
   // Integration service methods
   processQuery: (query, options) => ipcRenderer.invoke('process-query', query, options),
   processExcelFile: (filePath, query) => ipcRenderer.invoke('process-excel-file', filePath, query),
+  processExcelWithLLM: (filePath, instructions, options) => ipcRenderer.invoke('process-excel-with-llm', filePath, instructions, options),
+  processExcelWithActions: (filePath, instructions) => ipcRenderer.invoke('process-excel-with-actions', filePath, instructions),
+  openExcelWindow: (reportPath) => ipcRenderer.invoke('open-excel-report-window', reportPath),
+  generateExcelReport: (filePath, instructions, options) => ipcRenderer.invoke('generate-excel-report', filePath, instructions, options),
   processDocument: (filePath, query) => ipcRenderer.invoke('process-document', filePath, query),
   generateLetter: (templateType, data) => ipcRenderer.invoke('generate-letter', templateType, data),
   

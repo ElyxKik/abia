@@ -1,0 +1,67 @@
+{
+  "app_name": "ABIA - Agentive Intelligent Bureau Assistant",
+  "welcome": "Welcome to ABIA",
+  "settings": "Settings",
+  "dashboard": "Dashboard",
+  "chat": "Chat",
+  "agents": {
+    "document": "Document Agent",
+    "excel": "Excel Agent",
+    "mail": "Mail Agent",
+    "chat": "Chat Agent",
+    "filesystem": "File Agent",
+    "translation": "Translation Agent",
+    "task": "Task Agent"
+  },
+  "actions": {
+    "create": "Create",
+    "edit": "Edit",
+    "delete": "Delete",
+    "save": "Save",
+    "cancel": "Cancel",
+    "close": "Close",
+    "send": "Send",
+    "upload": "Upload",
+    "download": "Download",
+    "generate": "Generate"
+  },
+  "placeholders": {
+    "chat_input": "Type your message here...",
+    "search": "Search..."
+  },
+  "tooltips": {
+    "dark_mode": "Dark mode",
+    "light_mode": "Light mode",
+    "change_language": "Change language",
+    "settings": "Settings",
+    "upload_file": "Upload file",
+    "generate_report": "Generate report"
+  },
+  "messages": {
+    "file_uploaded": "File uploaded successfully",
+    "processing": "Processing...",
+    "error": "An error occurred",
+    "success": "Operation successful",
+    "no_results": "No results found",
+    "update_available": "Update available",
+    "update_downloaded": "Update downloaded"
+  },
+  "settings_labels": {
+    "general": "General",
+    "appearance": "Appearance",
+    "language": "Language",
+    "theme": "Theme",
+    "advanced": "Advanced",
+    "api_keys": "API Keys",
+    "about": "About"
+  },
+  "themes": {
+    "light": "Light",
+    "dark": "Dark",
+    "system": "System"
+  },
+  "languages": {
+    "fr": "French",
+    "en": "English"
+  }
+}

@@ -1,4 +1,4 @@
-const DocumentService = require('../services/document-service');
+const documentService = require('../services/document-service');
 const fs = require('fs');
 const path = require('path');
 const { spawn } = require('child_process');
@@ -8,7 +8,7 @@ const app = electron.app || (electron.remote && electron.remote.app);
 
 class DocumentAgent {
   constructor() {
-    this.documentService = new DocumentService();
+    this.documentService = documentService;
     this.initialized = false;
   }
   

@@ -59,7 +59,7 @@ function initDocAgent() {
   });
   
   // Gestionnaire d'événement pour l'analyse du document
-  analyzeBtn.addEventListener('click', () => {
+  analyzeBtn.addEventListener('click', async () => {
     const file = fileUpload.files[0];
     const questionText = question.value.trim();
     
@@ -73,66 +73,74 @@ function initDocAgent() {
       return;
     }
     
+    // Afficher le message de patience standard dans le chat principal
+    const processingMessageId = window.agentUtils.showFileProcessingMessage('document');
+    
     // Simuler une analyse en cours
     analyzeBtn.disabled = true;
     analyzeBtn.innerHTML = '<i class="fas fa-spinner fa-spin mr-2"></i> Analyse en cours...';
     results.classList.add('hidden');
     
-    // Envoyer le fichier et la question au backend
-    const formData = new FormData();
-    formData.append('file', file);
-    formData.append('question', questionText);
+    // S'assurer que le popup de chargement ne s'affiche pas
+    const processingAnimation = document.getElementById('processing-animation');
+    if (processingAnimation) {
+      processingAnimation.style.display = 'none';
+    }
     
-    // Simuler un délai de traitement (à remplacer par un appel API réel)
-    setTimeout(() => {
-      // Afficher les résultats (à remplacer par les résultats réels de l'API)
-      resultsContent.innerHTML = `
+    try {
+      // Obtenir le chemin réel du fichier sur le disque
+      const filePath = file.path;
+      if (!filePath) {
+        throw new Error('Impossible d\'accéder au chemin du fichier. Veuillez réessayer.');
+      }
+      
+      console.log(`Traitement du document: ${filePath} avec la question: ${questionText}`);
+      
+      // Appel réel à l'API Electron pour traiter le document
+      const response = await window.api.processDocument(filePath, questionText);
+      
+      // Vérifier si la réponse contient une erreur
+      if (response.error) {
+        throw new Error(response.error);
+      }
+      
+      // Formater la réponse pour l'affichage
+      const analysisResultHtml = `
         <p>Analyse du document <strong>${file.name}</strong> basée sur la question :</p>
         <blockquote class="p-3 bg-neutral-100 dark:bg-neutral-800 rounded-lg my-3">${questionText}</blockquote>
-        <p>Résultats de l'analyse :</p>
-        <div class="my-4">
-          <h3 class="text-lg font-medium mb-2">Résumé du document</h3>
-          <p>Ce document traite principalement des sujets suivants :</p>
-          <ul class="list-disc pl-5 mt-2">
-            <li>Introduction aux concepts fondamentaux</li>
-            <li>Analyse des tendances actuelles</li>
-            <li>Recommandations stratégiques</li>
-            <li>Perspectives d'avenir</li>
-          </ul>
+        <div class="analysis-result">
+          ${response.content || 'Aucun résultat disponible'}
         </div>
-        <div class="my-4">
-          <h3 class="text-lg font-medium mb-2">Réponse à votre question</h3>
-          <p>D'après l'analyse du document, les points clés sont :</p>
-          <ol class="list-decimal pl-5 mt-2">
-            <li>Le marché connaît une croissance annuelle de 12% depuis 2020.</li>
-            <li>Les principaux acteurs ont adopté des stratégies d'innovation pour maintenir leur avantage concurrentiel.</li>
-            <li>Les défis réglementaires constituent le principal obstacle à l'expansion.</li>
-            <li>Les opportunités de croissance se situent principalement dans les marchés émergents d'Asie et d'Afrique.</li>
-          </ol>
-        </div>
-        <p class="text-sm text-neutral-500 mt-4">Note: Ceci est une démonstration. Dans la version finale, les résultats seront générés par l'IA en fonction de votre document réel.</p>
       `;
       
+      // Mettre à jour le message dans le chat principal avec les résultats
+      window.agentUtils.addOrUpdateAgentChatMessage(analysisResultHtml, processingMessageId, false);
+      
+      // Afficher également les résultats dans la section de l'agent Document
+      resultsContent.innerHTML = analysisResultHtml;
+      results.classList.remove('hidden');
+    } catch (error) {
+      console.error('Erreur lors du traitement du document:', error);
+      
+      // Afficher l'erreur dans le chat principal
+      const errorMessage = `
+        <p>Une erreur est survenue lors du traitement du document :</p>
+        <p class="text-red-500">${error.message || 'Erreur inconnue'}</p>
+      `;
+      window.agentUtils.addOrUpdateAgentChatMessage(errorMessage, processingMessageId, false);
+      
+      // Afficher l'erreur dans la section de l'agent Document
+      resultsContent.innerHTML = errorMessage;
+      results.classList.remove('hidden');
+    } finally {
       // Réactiver le bouton d'analyse
       analyzeBtn.disabled = false;
       analyzeBtn.innerHTML = '<i class="fas fa-search-plus mr-2"></i> Analyser le document';
-      results.classList.remove('hidden');
-    }, 2000);
+    }
   });
 }
 
-/**
- * Formate la taille du fichier en unités lisibles
- * @param {number} bytes - Taille en octets
- * @returns {string} Taille formatée
- */
-function formatFileSize(bytes) {
-  if (bytes === 0) return '0 Bytes';
-  const k = 1024;
-  const sizes = ['Bytes', 'KB', 'MB', 'GB'];
-  const i = Math.floor(Math.log(bytes) / Math.log(k));
-  return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
-}
+// Utilise la fonction formatFileSize de agent-utils.js
 
 // Exporter les fonctions pour les rendre disponibles dans d'autres modules
 window.docAgent = {

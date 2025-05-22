@@ -15,6 +15,7 @@ const CONFIG_FILE_PATH = path.join(__dirname, '..', 'config', 'config.json');
 
 class ExcelLLMService {
   constructor() {
+    this.initialized = false; // Initialiser la propriété à false
     this.config = {
       maxRows: 100,
       maxCols: 20,
@@ -36,18 +37,33 @@ class ExcelLLMService {
         const globalConfig = JSON.parse(rawConfig);
         
         if (globalConfig.llm) {
+          console.log('Configuration LLM trouvée dans config.json');
+          
+          // Extraire le fournisseur LLM (deepseek, openai, etc.)
           if (globalConfig.llm.provider) {
             this.config.defaultProvider = globalConfig.llm.provider;
+            console.log(`Fournisseur LLM configuré: ${this.config.defaultProvider}`);
+            
+            // Stocker la clé API
             if (globalConfig.llm.apiKey) {
               this.config.apiKeys[globalConfig.llm.provider] = globalConfig.llm.apiKey;
+              console.log(`Clé API ${this.config.defaultProvider} configurée avec succès`);
+            } else {
+              console.warn(`Aucune clé API n'est configurée pour ${this.config.defaultProvider}`);
             }
           }
+          
+          // Extraire les autres paramètres de configuration
           if (globalConfig.llm.model) {
             this.config.defaultModel = globalConfig.llm.model;
+            console.log(`Modèle LLM configuré: ${this.config.defaultModel}`);
           }
+          
           if (globalConfig.llm.temperature) {
             this.config.temperature = globalConfig.llm.temperature;
+            console.log(`Température LLM configurée: ${this.config.temperature}`);
           }
+          
           if (globalConfig.llm.maxTokens) {
             this.config.maxTokens = globalConfig.llm.maxTokens;
           }
@@ -59,6 +75,10 @@ class ExcelLLMService {
     } catch (error) {
       console.error(`Erreur lors du chargement de la configuration globale depuis ${CONFIG_FILE_PATH}:`, error);
     }
+    
+    // Indiquer que le service est initialisé
+    this.initialized = true;
+    console.log('Service Excel LLM initialisé avec succès');
   }
 
   async extractExcelData(filePath, options = {}) {
@@ -182,8 +202,10 @@ class ExcelLLMService {
       }
       console.log('_extractWithPython - Fichier existe');
       
+      // Respecter les noms des options attendus par pythonExcelService.processExcelFile
       const pythonOptions = {
-        format: options.formatType,
+        // Nommer les propriétés exactement comme attendu dans le service Python
+        formatType: options.formatType, // 'formatType' au lieu de 'format'
         maxRows: options.maxRows,
         maxCols: options.maxCols,
         sheetIndex: options.sheetIndex
@@ -402,39 +424,420 @@ Analyse ces données Excel selon les instructions ci-dessus.
    * @param {Object} options - Options de traitement
    * @returns {Promise<Object>} - Rapport structuré au format JSON
    */
+  /**
+   * Traite les données Excel avec un modèle LLM pour générer une analyse intelligente
+   * @param {Object} data - Données Excel extraites 
+   * @param {string} instructions - Instructions pour l'analyse
+   * @param {Object} options - Options de traitement
+   * @returns {Promise<Object>} - Réponse du modèle LLM
+   */
+  /**
+   * Génère une analyse basique des données Excel sans utiliser un LLM
+   * Cette fonction est utilisée comme fallback quand la clé API n'est pas disponible
+   * @param {Object} data - Données Excel extraites
+   * @param {string} instructions - Instructions pour l'analyse
+   * @returns {Object} - Analyse basique structurée
+   */
+  generateBasicAnalysisWithoutLLM(data, instructions) {
+    console.log('Génération d\'une analyse sans LLM...');
+    
+    try {
+      // Créer une structure de base pour l'analyse
+      let analysis = {
+        content: JSON.stringify({
+          titre: `Analyse du fichier: ${data.fileName || 'Excel'}`,
+          resume: `Analyse automatique générée pour ${data.rowCount || 0} lignes et ${data.columnCount || 0} colonnes de données.`,
+          sections: [
+            {
+              titre: "Aperçu des données",
+              contenu: `Le fichier contient ${data.rowCount || 0} lignes et ${data.columnCount || 0} colonnes.`
+            }
+          ],
+          recommandations: [
+            "Activez le service LLM pour une analyse plus détaillée."
+          ]
+        }, null, 2)
+      };
+      
+      // Ajouter des sections spécifiques si des données sont disponibles
+      if (data.format === 'json' && Array.isArray(data.data) && data.data.length > 0) {
+        const sampleObj = data.data[0];
+        const keys = Object.keys(sampleObj);
+        
+        // Ajouter une section pour la structure des données
+        const structureSection = {
+          titre: "Structure des données",
+          contenu: `Les données contiennent les colonnes suivantes: ${keys.join(', ')}.`
+        };
+        
+        // Essayer d'identifier des colonnes numériques pour des statistiques basiques
+        const numericColumns = [];
+        keys.forEach(key => {
+          if (typeof sampleObj[key] === 'number') {
+            numericColumns.push(key);
+          }
+        });
+        
+        if (numericColumns.length > 0) {
+          // Calculer des statistiques basiques pour les colonnes numériques
+          const statsSection = {
+            titre: "Statistiques de base",
+            contenu: "Analyse des colonnes numériques:\n"
+          };
+          
+          numericColumns.forEach(col => {
+            let sum = 0;
+            let min = Number.MAX_VALUE;
+            let max = Number.MIN_VALUE;
+            let count = 0;
+            
+            data.data.forEach(row => {
+              if (typeof row[col] === 'number') {
+                sum += row[col];
+                min = Math.min(min, row[col]);
+                max = Math.max(max, row[col]);
+                count++;
+              }
+            });
+            
+            const avg = count > 0 ? sum / count : 0;
+            statsSection.contenu += `\n- ${col}: Min=${min}, Max=${max}, Moyenne=${avg.toFixed(2)}`;
+          });
+          
+          // Ajouter les sections au JSON
+          const analysisObj = JSON.parse(analysis.content);
+          analysisObj.sections.push(structureSection);
+          analysisObj.sections.push(statsSection);
+          analysis.content = JSON.stringify(analysisObj, null, 2);
+        }
+      }
+      
+      return analysis;
+    } catch (error) {
+      console.error('Erreur lors de la génération de l\'analyse sans LLM:', error);
+      return {
+        content: JSON.stringify({
+          titre: "Analyse basique (mode de secours)",
+          sections: [
+            {
+              titre: "Informations sur le fichier",
+              contenu: `Fichier: ${data.fileName}, Feuille: ${data.sheetName || 'Non spécifiée'}`
+            }
+          ]
+        })
+      };
+    }
+  }
+  
+  async processWithLLM(data, instructions, options = {}) {
+    console.log('Traitement des données Excel avec LLM...');
+    
+    try {
+      // Vérifier que nous avons une clé API pour le fournisseur par défaut
+      const provider = options.provider || this.config.defaultProvider;
+      const apiKey = this.config.apiKeys[provider];
+      
+      // Vérifier si nous sommes en mode sans LLM ou si la clé API n'est pas configurée
+      if (!apiKey || options.noLLM) {
+        console.log(`Mode sans LLM activé (clé API ${provider} non disponible ou mode sans LLM forcé)`);
+        
+        // Retourner une analyse simple sans LLM
+        return this.generateBasicAnalysisWithoutLLM(data, instructions);
+      }
+      
+      // Préparer les données pour le LLM
+      const model = options.model || this.config.defaultModel;
+      const temperature = options.temperature || this.config.temperature || 0.7;
+      const maxTokens = options.maxTokens || this.config.maxTokens || 4000;
+      
+      // Créer un prompt structuré à partir des données Excel
+      const prompt = this.formatPromptForLLM(data, instructions);
+      
+      // Structure de la requête pour l'API DeepSeek ou OpenAI
+      const requestBody = {
+        model: model,
+        messages: [
+          {
+            role: "system",
+            content: "Tu es un assistant d'analyse de données Excel spécialisé dans la création de rapports structurés. Analyse les données fournies et génère un rapport complet avec des sections claires, des insights pertinents et des recommandations."
+          },
+          {
+            role: "user",
+            content: prompt
+          }
+        ],
+        temperature: temperature,
+        max_tokens: maxTokens
+      };
+      
+      // Sélectionner l'URL de l'API en fonction du fournisseur
+      const apiUrl = this.config.apiEndpoints[provider];
+      if (!apiUrl) {
+        throw new Error(`URL d'API non configurée pour le fournisseur: ${provider}`);
+      }
+      
+      console.log(`Envoi de la requête à l'API ${provider}...`);
+      
+      // Appel à l'API
+      const response = await axios.post(apiUrl, requestBody, {
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${apiKey}`
+        }
+      });
+      
+      // Traiter la réponse
+      if (response.data && response.data.choices && response.data.choices.length > 0) {
+        const content = response.data.choices[0].message.content;
+        console.log('Réponse LLM reçue avec succès');
+        return { content };
+      } else {
+        throw new Error('Format de réponse LLM invalide ou vide');
+      }
+    } catch (error) {
+      console.error('Erreur lors du traitement LLM:', error);
+      
+      // Si l'erreur est liée à l'API, essayer de formater un message d'erreur plus informatif
+      if (error.response) {
+        const statusCode = error.response.status;
+        const errorData = error.response.data;
+        
+        console.error(`Erreur API (${statusCode}):`, errorData);
+        
+        return {
+          error: `Erreur de l'API LLM (${statusCode}): ${errorData.error || JSON.stringify(errorData)}`
+        };
+      }
+      
+      // Erreur générique
+      return {
+        error: `Erreur lors de l'analyse LLM: ${error.message}`
+      };
+    }
+  }
+  
+  /**
+   * Formate un prompt pour le LLM à partir des données Excel
+   * @param {Object} data - Données Excel extraites
+   * @param {string} instructions - Instructions pour l'analyse
+   * @returns {string} - Prompt formaté pour le LLM
+   */
+  formatPromptForLLM(data, instructions) {
+    let prompt = `## Instructions
+${instructions || "Analyse ces données Excel et génère un rapport structuré détaillé."}
+
+## Informations sur le fichier
+`;
+    
+    // Ajouter les métadonnées du fichier
+    prompt += `Nom du fichier: ${data.fileName || 'Non spécifié'}
+`;
+    prompt += `Feuille: ${data.sheetName || 'Par défaut'}
+`;
+    prompt += `Dimensions: ${data.rowCount || 0} lignes x ${data.columnCount || 0} colonnes\n\n`;
+    
+    // Ajouter un échantillon des données
+    prompt += "## Échantillon de données\n";
+    
+    if (data.format === 'json' && Array.isArray(data.data)) {
+      // Limiter le nombre de lignes pour éviter d'excéder la taille maximale du prompt
+      const sampleData = data.data.slice(0, Math.min(data.data.length, 20));
+      prompt += JSON.stringify(sampleData, null, 2);
+    } else if (data.format === 'markdown' && typeof data.data === 'string') {
+      // Pour les données au format markdown, limiter la taille
+      prompt += data.data.substring(0, 2000) + (data.data.length > 2000 ? '...' : '');
+    } else {
+      prompt += "Données non disponibles au format requis.";
+    }
+    
+    // Ajouter des instructions spécifiques pour la structure du rapport
+    prompt += `
+
+## Format de réponse attendu
+Génère un rapport structuré au format JSON avec la structure suivante :
+
+{
+  "titre": "Titre du rapport",
+  "resume": "Résumé général des données",
+  "sections": [
+    {
+      "titre": "Titre de la section 1",
+      "contenu": "Contenu détaillé de la section 1"
+    },
+    {
+      "titre": "Titre de la section 2",
+      "contenu": "Contenu détaillé de la section 2"
+    }
+  ],
+  "recommandations": [
+    "Recommandation 1",
+    "Recommandation 2"
+  ]
+}
+
+Assure-toi d'inclure au moins 3-5 sections pertinentes et 2-4 recommandations basées sur l'analyse des données.`;
+    
+    return prompt;
+  }
+  
   async generateStructuredReport(filePath, instructions = "", options = {}) {
     // Ajouter un timeout de sécurité pour éviter les blocages
     const reportTimeout = setTimeout(() => {
       console.error(`Timeout de sécurité atteint pour la génération du rapport: ${filePath}`);
       // Ce timeout ne fait rien directement, mais permet de voir dans les logs si le processus reste bloqué
-    }, 20000); // 20 secondes
+    }, 60000); // 60 secondes (augmenté pour tenir compte du temps d'appel LLM)
     
     try {
-      console.log(`Génération d'un rapport structuré pour le fichier Excel: ${filePath}`);
+      console.log(`Génération d'un rapport structuré pour le fichier Excel avec LLM: ${filePath}`);
       
+      // Initialiser les services nécessaires
+      if (!pythonExcelService.initialized) {
+        await pythonExcelService.initialize();
+      }
+      
+      // Étape 1: Extraire les données brutes du fichier Excel avec Python
+      console.log('Phase 1: Extraction des données Excel avec Python');
       const extractOptions = {
         maxRows: options.maxRows || this.config.maxRows,
         maxCols: options.maxCols || this.config.maxCols,
         sheetIndex: options.sheetIndex || 0,
         includeHeaders: options.includeHeaders !== false,
-        formatType: 'json', // Toujours utiliser JSON pour les rapports structurés
-        structuredReport: true,
-        instructions: instructions
+        formatType: 'json'
       };
       
-      // Utiliser le service Python pour générer le rapport structuré
-      if (!pythonExcelService.initialized) {
-        await pythonExcelService.initialize();
+      const rawData = await pythonExcelService.processExcelFile(filePath, extractOptions);
+      
+      if (rawData.error) {
+        throw new Error(`Erreur lors de l'extraction des données Excel: ${rawData.error}`);
       }
       
-      const result = await pythonExcelService.processExcelFile(filePath, extractOptions);
+      console.log(`Données extraites: ${rawData.fileName}, ${rawData.rowCount} lignes, ${rawData.columnCount} colonnes`);
+      
+      // Étape 2: Préparer des instructions spécifiques pour le LLM
+      const llmInstructions = instructions || 
+        "Analyse ce fichier Excel et crée un rapport structuré complet avec les sections suivantes : " +
+        "1. Résumé des données principales " +
+        "2. Analyse des tendances et patterns identifiés " +
+        "3. Points clés à retenir " +
+        "4. Recommandations basées sur les données " +
+        "Assure-toi d'inclure des statistiques pertinentes et une analyse approfondie.";
+      
+      // Étape 3: Envoyer les données au LLM pour analyse et structuration
+      console.log('Phase 2: Analyse des données avec DeepSeek LLM');
+      const llmResponse = await this.processWithLLM(rawData, llmInstructions, options);
+      
+      if (!llmResponse || llmResponse.error) {
+        throw new Error(`Erreur lors de l'analyse LLM: ${llmResponse?.error || 'Réponse LLM vide'}`);
+      }
+      
+      // Étape 4: Générer un rapport structuré basé sur l'analyse LLM
+      console.log('Phase 3: Génération du rapport structuré final');
+      
+      // Extraire le contenu de la réponse LLM
+      const llmContent = llmResponse.content || llmResponse;
+      
+      // Générer le rapport structuré final avec Python
+      // Préparer les options avec le bon format de nom de variable
+      const pythonOptions = {
+        ...extractOptions,
+        structuredReport: true,
+        instructions: llmInstructions,
+        // Utiliser llm_analysis pour être cohérent avec le script Python
+        llm_analysis: llmContent
+      };
+      
+      console.log('Envoi des données au script Python avec analyse LLM');
+      const result = await pythonExcelService.processExcelFile(filePath, pythonOptions);
       
       if (result.error) {
         throw new Error(`Erreur lors de la génération du rapport structuré: ${result.error}`);
       }
       
+      // Vérifier si le rapport structuré est présent
       if (!result.structured_report) {
-        throw new Error("Le rapport structuré n'a pas été généré correctement");
+        // Fallback: créer un rapport structuré à partir de l'analyse LLM
+        console.log('Construction d\'un rapport structuré à partir de l\'analyse LLM');
+        
+        // Créer une structure de rapport par défaut
+        const llmStructuredReport = {
+          titre: `Rapport d'analyse: ${path.basename(filePath)}`,
+          fichier: {
+            nom: path.basename(filePath),
+            feuille: result.sheetName || '',
+            dimensions: `${result.rowCount || 0} lignes × ${result.columnCount || 0} colonnes`
+          },
+          resume: "Analyse complète des données Excel",
+          sections: [],
+          recommandations: []
+        };
+        
+        // Tenter d'extraire des sections depuis la réponse LLM
+        try {
+          // Détecter si la réponse contient du JSON
+          if (typeof llmContent === 'string' && llmContent.includes('{') && llmContent.includes('}')) {
+            const jsonMatch = llmContent.match(/\{[\s\S]*\}/m);
+            if (jsonMatch) {
+              const extractedJson = JSON.parse(jsonMatch[0]);
+              if (extractedJson.sections || extractedJson.recommendations) {
+                Object.assign(llmStructuredReport, extractedJson);
+              }
+            }
+          }
+          
+          // Si aucun JSON n'a été détecté, diviser le texte en sections
+          if (llmStructuredReport.sections.length === 0 && typeof llmContent === 'string') {
+            // Détecter les sections par les titres (numérotés ou non)
+            const sectionRegex = /\n\s*(\d+\.\s*|#+\s*|\*\*\s*)?([A-Z][^\n]+)\s*[:\n]/g;
+            let match;
+            let lastIndex = 0;
+            const sections = [];
+            
+            while ((match = sectionRegex.exec(llmContent)) !== null) {
+              const sectionTitle = match[2].trim();
+              const startIndex = match.index + match[0].length;
+              
+              // Ajouter la section précédente
+              if (sections.length > 0) {
+                const prevSection = sections[sections.length - 1];
+                prevSection.contenu = llmContent.substring(lastIndex, match.index).trim();
+              }
+              
+              // Ajouter la nouvelle section
+              sections.push({
+                titre: sectionTitle,
+                contenu: ''
+              });
+              
+              lastIndex = startIndex;
+            }
+            
+            // Ajouter le contenu de la dernière section
+            if (sections.length > 0) {
+              const lastSection = sections[sections.length - 1];
+              lastSection.contenu = llmContent.substring(lastIndex).trim();
+            }
+            
+            // Si aucune section n'a été trouvée, créer une section unique
+            if (sections.length === 0) {
+              sections.push({
+                titre: "Analyse des données",
+                contenu: llmContent
+              });
+            }
+            
+            llmStructuredReport.sections = sections;
+          }
+        } catch (parseError) {
+          console.error('Erreur lors du parsing de la réponse LLM:', parseError);
+          // Créer une section de secours avec le contenu brut
+          llmStructuredReport.sections = [{
+            titre: "Analyse des données",
+            contenu: typeof llmContent === 'string' ? llmContent : JSON.stringify(llmContent, null, 2)
+          }];
+        }
+        
+        // Utiliser ce rapport comme fallback
+        result.structured_report = llmStructuredReport;
       }
       
       // Nettoyer le timeout
@@ -460,18 +863,22 @@ Analyse ces données Excel selon les instructions ci-dessus.
   }
   
   async processExcelWithLLM(filePath, instructions, options = {}) {
+    console.log(`Traitement du fichier Excel avec LLM: ${filePath}`);
+    console.log(`Instructions: ${instructions}`);
+    console.log(`Options: ${JSON.stringify(options)}`);
+    
     try {
-      console.log(`Traitement du fichier Excel avec LLM: ${filePath}`);
-      console.log(`Instructions: ${instructions}`);
-      
+      // Utiliser 'json' comme format par défaut pour éviter les problèmes de conversion en int
       const extractOptions = {
+        // Respecter l'ordre des paramètres attendus par le script Python
+        formatType: 'json', // Toujours utiliser JSON pour l'extraction initiale
         maxRows: options.maxRows || this.config.maxRows,
         maxCols: options.maxCols || this.config.maxCols,
         sheetIndex: options.sheetIndex || 0,
-        includeHeaders: options.includeHeaders !== false,
-        formatType: options.formatType || 'markdown'
+        includeHeaders: options.includeHeaders !== false
       };
       
+      console.log(`Extraction des données Excel avec options: ${JSON.stringify(extractOptions)}`);
       const excelData = await this.extractExcelData(filePath, extractOptions);
       
       const llmOptions = {

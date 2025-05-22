@@ -56,13 +56,14 @@ class PythonExcelService {
         await this.initialize();
       }
   
-      const {
-        format = 'markdown', 
+      const { 
+        format: formatType = 'json', 
         maxRows = 100, 
         maxCols = 20, 
         sheetIndex = 0,
         structuredReport = false,
-        instructions = ''
+        instructions = '',
+        llm_analysis // Ajout de llm_analysis à la déstructuration
       } = options;
   
       return new Promise((resolve, reject) => {
@@ -88,8 +89,9 @@ class PythonExcelService {
             return;
           }
           
-          // Construire les arguments pour le script Python
-          const args = [filePath, format, maxRows, maxCols, sheetIndex];
+          // Construire les arguments pour le script Python selon l'ordre attendu dans la fonction main() :
+          // 1) file_path, 2) format_type, 3) max_rows, 4) max_cols, 5) sheet_index
+          const args = [filePath, formatType, maxRows, maxCols, sheetIndex];
           
           // Ajouter l'option de rapport structuré si demandé
           if (structuredReport) {
@@ -97,6 +99,25 @@ class PythonExcelService {
             if (instructions) {
               args.push(instructions);
             }
+          }
+          
+          // Ajouter l'analyse LLM si disponible
+          if (options.llm_analysis) {
+            args.push('--llm-analysis');
+            
+            // Créer un fichier temporaire pour stocker l'analyse LLM (pour éviter les problèmes de longueur d'argument)
+            const tempDir = path.join(os.tmpdir(), 'abia4');
+            if (!fs.existsSync(tempDir)) {
+              fs.mkdirSync(tempDir, { recursive: true });
+            }
+            
+            const llmAnalysisFile = path.join(tempDir, `llm_analysis_${Date.now()}.json`);
+            fs.writeFileSync(llmAnalysisFile, options.llm_analysis);
+            
+            // Passer le chemin du fichier temporaire au lieu du contenu entier
+            args.push(llmAnalysisFile);
+            
+            console.log(`Analyse LLM sauvegardée dans le fichier temporaire: ${llmAnalysisFile}`);
           }
           
           const pythonOptions = {
@@ -109,8 +130,17 @@ class PythonExcelService {
           console.log(`processExcelFile - Chemin Python utilisé: ${this.pythonPath}`);
           console.log(`processExcelFile - Arguments: ${JSON.stringify(pythonOptions.args)}`);
           
-          // Exécuter le script Python avec un timeout plus court
-          const timeout = 5000; // 5 secondes - réduit pour éviter les attentes trop longues
+          // Déterminer le timeout en fonction du type d'opération
+          let timeout;
+          // Utiliser options.llm_analysis pour vérifier sa présence
+          if (structuredReport || options.llm_analysis) { 
+            // Timeout plus long pour les opérations complexes comme les rapports structurés
+            timeout = 30000; // 30 secondes pour les opérations impliquant une analyse structurée
+            console.log(`Timeout de ${timeout/1000}s configuré pour le traitement du rapport structuré`);
+          } else {
+            // Timeout standard pour les opérations simples
+            timeout = 10000; // 10 secondes pour les opérations standard
+          }
           let timeoutId;
           let isProcessCompleted = false;
           let isResolved = false;

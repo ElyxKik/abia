@@ -1,0 +1,155 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Rapport Excel - ABIA</title>
+  <link rel="stylesheet" href="css/tailwind.min.css">
+  <link rel="stylesheet" href="css/fontawesome.min.css">
+  <link rel="stylesheet" href="css/styles.css">
+  <!-- Bibliothèques pour les graphiques et l'exportation -->
+  <script src="js/chart.min.js" defer></script>
+  <script src="../node_modules/jspdf/dist/jspdf.umd.min.js" defer></script>
+  <script src="../node_modules/html2canvas/dist/html2canvas.min.js" defer></script>
+  <script src="js/excel-report-viewer.js" defer></script>
+  <script src="js/excel-report-exporter.js" defer></script>
+</head>
+<body class="bg-white dark:bg-neutral-900 text-neutral-900 dark:text-white min-h-screen">
+  <div class="container mx-auto px-4 py-6">
+    <!-- En-tête du rapport -->
+    <header class="mb-8">
+      <div class="flex justify-between items-center">
+        <h1 id="report-title" class="text-2xl font-bold">Rapport d'analyse Excel</h1>
+        <div class="flex space-x-3">
+          <button id="export-pdf" class="btn btn-outline flex items-center">
+            <i class="fas fa-file-pdf mr-2"></i>
+            Exporter en PDF
+          </button>
+          <button id="export-json" class="btn btn-outline flex items-center">
+            <i class="fas fa-file-code mr-2"></i>
+            Exporter en JSON
+          </button>
+          <button id="print-report" class="btn btn-outline flex items-center">
+            <i class="fas fa-print mr-2"></i>
+            Imprimer
+          </button>
+        </div>
+      </div>
+      <div id="report-metadata" class="mt-4 text-sm text-neutral-600 dark:text-neutral-400">
+        <!-- Métadonnées du rapport -->
+      </div>
+    </header>
+
+    <!-- Contenu du rapport -->
+    <main>
+      <!-- Résumé du rapport -->
+      <section id="report-summary" class="mb-8 p-6 bg-neutral-100 dark:bg-neutral-800 rounded-lg">
+        <h2 class="text-xl font-semibold mb-4">Résumé</h2>
+        <div id="summary-content" class="prose dark:prose-invert">
+          <!-- Contenu du résumé -->
+        </div>
+      </section>
+
+      <!-- Sections du rapport (générées dynamiquement) -->
+      <div id="report-sections" class="grid grid-cols-1 md:grid-cols-2 gap-6">
+        <!-- Les sections seront générées ici -->
+      </div>
+
+      <!-- Graphiques -->
+      <section id="charts-section" class="mt-8">
+        <h2 class="text-xl font-semibold mb-4">Visualisations</h2>
+        <div id="charts-container" class="grid grid-cols-1 md:grid-cols-2 gap-6">
+          <!-- Les graphiques seront générés ici -->
+        </div>
+      </section>
+
+      <!-- Recommandations -->
+      <section id="recommendations-section" class="mt-8 p-6 bg-neutral-100 dark:bg-neutral-800 rounded-lg">
+        <h2 class="text-xl font-semibold mb-4">Recommandations</h2>
+        <div id="recommendations-content" class="prose dark:prose-invert">
+          <!-- Les recommandations seront générées ici -->
+        </div>
+      </section>
+    </main>
+  </div>
+
+  <!-- Template pour les sections -->
+  <template id="section-template">
+    <div class="section-card p-6 bg-white dark:bg-neutral-800 rounded-lg shadow">
+      <h3 class="section-title text-lg font-semibold mb-3"></h3>
+      <div class="section-content prose dark:prose-invert"></div>
+    </div>
+  </template>
+
+  <!-- Template pour les graphiques -->
+  <template id="chart-template">
+    <div class="chart-card p-6 bg-white dark:bg-neutral-800 rounded-lg shadow">
+      <h3 class="chart-title text-lg font-semibold mb-3"></h3>
+      <div class="chart-container" style="height: 300px;">
+        <canvas class="chart-canvas"></canvas>
+      </div>
+    </div>
+  </template>
+  <!-- Script d'initialisation pour connecter les boutons aux fonctions d'exportation -->
+  <script>
+    document.addEventListener('DOMContentLoaded', function() {
+      // Connecter le bouton d'exportation PDF
+      const exportPdfBtn = document.getElementById('export-pdf');
+      if (exportPdfBtn) {
+        exportPdfBtn.addEventListener('click', function() {
+          console.log('Export PDF demandé');
+          const container = document.querySelector('.container');
+          if (window.excelReportExporter && container) {
+            window.excelReportExporter.exportAsPDF('rapport-excel', container);
+          } else {
+            console.error('Exportateur de rapport ou conteneur non disponible');
+            alert('Erreur: Impossible d\'exporter en PDF. Veuillez réessayer.');
+          }
+        });
+      }
+
+      // Connecter le bouton d'exportation JSON
+      const exportJsonBtn = document.getElementById('export-json');
+      if (exportJsonBtn) {
+        exportJsonBtn.addEventListener('click', function() {
+          console.log('Export JSON demandé');
+          if (window.reportData && window.excelReportExporter) {
+            // Convertir l'objet en JSON formaté et l'exporter
+            const jsonString = JSON.stringify(window.reportData, null, 2);
+            const blob = new Blob([jsonString], { type: 'application/json' });
+            const url = URL.createObjectURL(blob);
+            
+            // Créer un lien de téléchargement et cliquer dessus
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = 'rapport-excel.json';
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            URL.revokeObjectURL(url);
+          } else {
+            console.error('Données de rapport ou exportateur non disponible');
+            alert('Erreur: Impossible d\'exporter en JSON. Veuillez réessayer.');
+          }
+        });
+      }
+
+      // Connecter le bouton d'impression
+      const printReportBtn = document.getElementById('print-report');
+      if (printReportBtn) {
+        printReportBtn.addEventListener('click', function() {
+          console.log('Impression demandée');
+          window.print();
+        });
+      }
+
+      // Initialiser l'exportateur de rapport s'il est disponible
+      if (window.excelReportExporter) {
+        console.log('Exportateur de rapport initialisé');
+      } else {
+        console.warn('Exportateur de rapport non disponible');
+      }
+    });
+  </script>
+</body>
+</html>

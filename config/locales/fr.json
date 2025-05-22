@@ -1,0 +1,67 @@
+{
+  "app_name": "ABIA - Assistant Bureau Intelligent Agentique",
+  "welcome": "Bienvenue sur ABIA",
+  "settings": "Paramètres",
+  "dashboard": "Tableau de bord",
+  "chat": "Discussion",
+  "agents": {
+    "document": "Agent Document",
+    "excel": "Agent Excel",
+    "mail": "Agent Mail",
+    "chat": "Agent Chat",
+    "filesystem": "Agent Fichier",
+    "translation": "Agent Traduction",
+    "task": "Agent Tâche"
+  },
+  "actions": {
+    "create": "Créer",
+    "edit": "Modifier",
+    "delete": "Supprimer",
+    "save": "Enregistrer",
+    "cancel": "Annuler",
+    "close": "Fermer",
+    "send": "Envoyer",
+    "upload": "Importer",
+    "download": "Télécharger",
+    "generate": "Générer"
+  },
+  "placeholders": {
+    "chat_input": "Tapez votre message ici...",
+    "search": "Rechercher..."
+  },
+  "tooltips": {
+    "dark_mode": "Mode sombre",
+    "light_mode": "Mode clair",
+    "change_language": "Changer de langue",
+    "settings": "Paramètres",
+    "upload_file": "Importer un fichier",
+    "generate_report": "Générer un rapport"
+  },
+  "messages": {
+    "file_uploaded": "Fichier importé avec succès",
+    "processing": "Traitement en cours...",
+    "error": "Une erreur est survenue",
+    "success": "Opération réussie",
+    "no_results": "Aucun résultat trouvé",
+    "update_available": "Mise à jour disponible",
+    "update_downloaded": "Mise à jour téléchargée"
+  },
+  "settings_labels": {
+    "general": "Général",
+    "appearance": "Apparence",
+    "language": "Langue",
+    "theme": "Thème",
+    "advanced": "Avancé",
+    "api_keys": "Clés API",
+    "about": "À propos"
+  },
+  "themes": {
+    "light": "Clair",
+    "dark": "Sombre",
+    "system": "Système"
+  },
+  "languages": {
+    "fr": "Français",
+    "en": "Anglais"
+  }
+}

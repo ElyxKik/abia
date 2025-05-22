@@ -5,6 +5,8 @@ const MainAgent = require('../agents/MainAgent');
 const config = require('../config/config');
 const path = require('path');
 const fs = require('fs');
+const excelLLMService = require('./excel-llm-service');
+const pythonExcelService = require('./python-excel-service');
 
 /**
  * Service d'intégration qui coordonne les différents agents et services
@@ -28,6 +30,10 @@ class IntegrationService {
     // Utiliser le service de mémoire pour l'historique de conversation
     this.memoryService = MemoryService;
     this.maxHistoryLength = config.get('storage.historyLimit', 100);
+    
+    // Utiliser les services de traitement Excel
+    this.excelLLMService = excelLLMService;
+    this.pythonExcelService = pythonExcelService;
   }
 
   /**
@@ -46,6 +52,26 @@ class IntegrationService {
           console.log('Tentative de configuration du service LLM avec la clé API trouvée...');
           this.llmService.configure({ apiKey });
         }
+      }
+      
+      // Initialiser les services Excel
+      console.log('Initialisation des services Excel...');
+      if (this.excelLLMService && typeof this.excelLLMService.initialize === 'function') {
+        this.excelLLMService.initialize();
+        console.log('Service Excel LLM initialisé');
+      } else {
+        console.warn('Service Excel LLM non disponible ou méthode initialize non trouvée');
+      }
+      
+      if (this.pythonExcelService && typeof this.pythonExcelService.initialize === 'function') {
+        const pythonInitialized = this.pythonExcelService.initialize();
+        if (pythonInitialized) {
+          console.log('Service Python Excel initialisé');
+        } else {
+          console.warn('Initialisation du service Python Excel a échoué');
+        }
+      } else {
+        console.warn('Service Python Excel non disponible ou méthode initialize non trouvée');
       }
       
       // Vérifier et initialiser le service LangChain
