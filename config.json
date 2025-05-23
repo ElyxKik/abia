@@ -1,0 +1,40 @@
+{
+  "api": {
+    "deepl": {
+      "key": "YOUR_DEEPL_API_KEY_HERE",
+      "url": "https://api.deepl.com/v2"
+    }
+  },
+  "supportedLanguages": {
+    "source": [
+      {"code": "auto", "name": "Détection automatique"},
+      {"code": "FR", "name": "Français"},
+      {"code": "EN", "name": "Anglais"},
+      {"code": "DE", "name": "Allemand"},
+      {"code": "ES", "name": "Espagnol"},
+      {"code": "IT", "name": "Italien"},
+      {"code": "NL", "name": "Néerlandais"},
+      {"code": "PL", "name": "Polonais"},
+      {"code": "PT", "name": "Portugais"},
+      {"code": "RU", "name": "Russe"},
+      {"code": "ZH", "name": "Chinois"}
+    ],
+    "target": [
+      {"code": "FR", "name": "Français"},
+      {"code": "EN-US", "name": "Anglais (US)"},
+      {"code": "EN-GB", "name": "Anglais (UK)"},
+      {"code": "DE", "name": "Allemand"},
+      {"code": "ES", "name": "Espagnol"},
+      {"code": "IT", "name": "Italien"},
+      {"code": "NL", "name": "Néerlandais"},
+      {"code": "PL", "name": "Polonais"},
+      {"code": "PT-PT", "name": "Portugais (Portugal)"},
+      {"code": "PT-BR", "name": "Portugais (Brésil)"},
+      {"code": "RU", "name": "Russe"},
+      {"code": "ZH", "name": "Chinois"}
+    ]
+  },
+  "supportedFileTypes": {
+    "translation": [".pdf", ".docx", ".pptx", ".txt"]
+  }
+}

@@ -10,6 +10,7 @@
   <link rel="stylesheet" href="css/excel-report.css">
   <link rel="stylesheet" href="css/markdown-content.css">
   <link rel="stylesheet" href="css/report-preview.css">
+  <link rel="stylesheet" href="css/sidebar.css">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
@@ -48,6 +49,96 @@
     .dark .loader {
       border-color: rgba(255, 255, 255, 0.1);
       border-top-color: #6366f1;
+    }
+    
+    /* Styles pour les notifications */
+    #notifications-container {
+      position: fixed;
+      top: 20px;
+      right: 20px;
+      z-index: 9999;
+      max-width: 350px;
+      width: 100%;
+    }
+    
+    .notification {
+      background-color: white;
+      border-radius: 8px;
+      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+      margin-bottom: 10px;
+      overflow: hidden;
+      animation: slideIn 0.3s ease-out forwards;
+      position: relative;
+    }
+    
+    .dark .notification {
+      background-color: #1f2937;
+      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+    }
+    
+    .notification-content {
+      padding: 16px;
+    }
+    
+    .notification h3 {
+      margin: 0 0 8px 0;
+      font-size: 16px;
+      font-weight: 600;
+    }
+    
+    .notification p {
+      margin: 0;
+      font-size: 14px;
+      color: #4b5563;
+    }
+    
+    .dark .notification p {
+      color: #9ca3af;
+    }
+    
+    .notification-close {
+      position: absolute;
+      top: 8px;
+      right: 8px;
+      background: none;
+      border: none;
+      cursor: pointer;
+      color: #9ca3af;
+      padding: 4px;
+      border-radius: 4px;
+    }
+    
+    .notification-close:hover {
+      background-color: rgba(0, 0, 0, 0.05);
+      color: #4b5563;
+    }
+    
+    .dark .notification-close:hover {
+      background-color: rgba(255, 255, 255, 0.1);
+      color: #e5e7eb;
+    }
+    
+    .notification.error {
+      border-left: 4px solid #ef4444;
+    }
+    
+    .notification.success {
+      border-left: 4px solid #10b981;
+    }
+    
+    .notification.info {
+      border-left: 4px solid #3b82f6;
+    }
+    
+    @keyframes slideIn {
+      from {
+        transform: translateX(100%);
+        opacity: 0;
+      }
+      to {
+        transform: translateX(0);
+        opacity: 1;
+      }
     }
     
     #processing-animation {
@@ -129,20 +220,20 @@
           <h2 class="text-xs font-semibold text-neutral-500 dark:text-neutral-400 uppercase tracking-wider px-3 mb-2">Navigation</h2>
           <ul>
             <li>
-              <a href="#dashboard" class="sidebar-item active">
-                <i class="fas fa-brain mr-3"></i>
+              <a href="#dashboard" class="menu-item active">
+                <i class="fas fa-brain icon"></i>
                 <span>Tableau de bord</span>
               </a>
             </li>
             <li>
-              <a href="#chat" class="sidebar-item">
-                <i class="fas fa-comment-alt mr-3"></i>
+              <a href="#chat" class="menu-item">
+                <i class="fas fa-comment-alt icon"></i>
                 <span>Chat IA</span>
               </a>
             </li>
             <li>
-              <a href="#history" class="sidebar-item">
-                <i class="fas fa-history mr-3"></i>
+              <a href="#history" class="menu-item">
+                <i class="fas fa-history icon"></i>
                 <span>Historique</span>
               </a>
             </li>
@@ -153,21 +244,27 @@
           <h2 class="text-xs font-semibold text-neutral-500 dark:text-neutral-400 uppercase tracking-wider px-3 mb-2">Agents IA</h2>
           <ul>
             <li>
-              <a href="#excel-agent" class="sidebar-item">
-                <i class="fas fa-table mr-3"></i>
+              <a href="#excel-agent" class="menu-item">
+                <i class="fas fa-table icon"></i>
                 <span>Agent Excel</span>
               </a>
             </li>
             <li>
-              <a href="#mail-agent" class="sidebar-item">
-                <i class="fas fa-envelope mr-3"></i>
+              <a href="#mail-agent" class="menu-item">
+                <i class="fas fa-envelope icon"></i>
                 <span>Agent Courriers</span>
               </a>
             </li>
             <li>
-              <a href="#doc-agent" class="sidebar-item">
-                <i class="fas fa-file-alt mr-3"></i>
+              <a href="#doc-agent" class="menu-item">
+                <i class="fas fa-file-alt icon"></i>
                 <span>Agent Documents</span>
+              </a>
+            </li>
+            <li>
+              <a href="#translation-agent" class="menu-item" id="translation-agent-link">
+                <i class="fas fa-language icon"></i>
+                <span>Agent Traduction</span>
               </a>
             </li>
           </ul>
@@ -178,14 +275,14 @@
           <ul id="recent-conversations">
             <!-- Conversations récentes seront ajoutées ici dynamiquement -->
             <li>
-              <a href="#" class="sidebar-item">
-                <i class="fas fa-comment mr-3"></i>
+              <a href="#" class="menu-item">
+                <i class="fas fa-comment icon"></i>
                 <span>Analyse des ventes Q1</span>
               </a>
             </li>
             <li>
-              <a href="#" class="sidebar-item">
-                <i class="fas fa-comment mr-3"></i>
+              <a href="#" class="menu-item">
+                <i class="fas fa-comment icon"></i>
                 <span>Lettre de motivation</span>
               </a>
             </li>
@@ -646,6 +743,161 @@
             </div>
           </div>
         </div>
+        
+        <!-- Translation Agent View -->
+        <div id="translation-agent-view" class="h-full flex flex-col" style="display: none;">
+          <div class="p-6">
+            <h1 class="text-2xl font-bold mb-6">Agent Traduction</h1>
+            
+            <div class="card mb-6">
+              <h2 class="text-lg font-semibold mb-4">Traduction de document</h2>
+              <p class="mb-4">Importez un document pour le traduire avec DeepL. Formats supportés: PDF, DOCX, DOC, TXT.</p>
+              
+              <!-- Sélection des langues pour le document -->
+              <div class="flex flex-col md:flex-row gap-4 mb-4">
+                <div class="flex-1">
+                  <label class="block text-sm font-medium mb-2">Langue source du document</label>
+                  <select id="translation-doc-source-lang" class="w-full border border-neutral-300 dark:border-neutral-600 rounded-lg px-4 py-2 dark:bg-neutral-800">
+                    <option value="auto">Détection automatique</option>
+                    <option value="fr">Français</option>
+                    <option value="en">Anglais</option>
+                    <option value="es">Espagnol</option>
+                    <option value="de">Allemand</option>
+                    <option value="it">Italien</option>
+                    <option value="pt">Portugais</option>
+                    <option value="nl">Néerlandais</option>
+                    <option value="ru">Russe</option>
+                    <option value="zh">Chinois</option>
+                  </select>
+                </div>
+                <div class="flex-1">
+                  <label class="block text-sm font-medium mb-2">Langue cible du document</label>
+                  <select id="translation-doc-target-lang" class="w-full border border-neutral-300 dark:border-neutral-600 rounded-lg px-4 py-2 dark:bg-neutral-800">
+                    <option value="fr">Français</option>
+                    <option value="en" selected>Anglais</option>
+                    <option value="es">Espagnol</option>
+                    <option value="de">Allemand</option>
+                    <option value="it">Italien</option>
+                    <option value="pt">Portugais</option>
+                    <option value="nl">Néerlandais</option>
+                    <option value="ru">Russe</option>
+                    <option value="zh">Chinois</option>
+                  </select>
+                </div>
+              </div>
+              
+              <!-- Upload de fichier -->
+              <div class="mb-4">
+                <label class="block text-sm font-medium mb-2">Fichier document</label>
+                <div class="flex items-center">
+                  <label for="translation-file-upload" id="file-upload-button" class="flex-1 cursor-pointer border border-dashed border-neutral-300 dark:border-neutral-600 rounded-lg p-6 text-center hover:bg-neutral-50 dark:hover:bg-neutral-800/50 transition-colors duration-200">
+                    <input type="file" id="translation-file-upload" class="hidden" accept=".pdf,.docx,.doc,.txt" />
+                    <i class="fas fa-cloud-upload-alt text-3xl text-primary-500 mb-3"></i>
+                    <p class="text-sm mb-1">Glissez-déposez votre document ou cliquez pour parcourir</p>
+                    <p class="text-xs text-neutral-500 dark:text-neutral-400">Taille maximale: 10 MB</p>
+                  </label>
+                </div>
+              </div>
+              
+              <!-- Aperçu du fichier -->
+              <div id="translation-file-preview" class="mb-4 hidden">
+                <div class="bg-neutral-100 dark:bg-neutral-800 rounded-lg p-4 flex items-center">
+                  <i class="fas fa-file-alt text-2xl text-primary-500 mr-4"></i>
+                  <div class="flex-1">
+                    <p id="translation-filename" class="font-medium">nom_du_fichier.pdf</p>
+                    <p id="translation-filesize" class="text-xs text-neutral-500 dark:text-neutral-400 mt-1">1.2 MB</p>
+                  </div>
+                  <button id="translation-file-remove" class="text-neutral-500 hover:text-red-500 p-2">
+                    <i class="fas fa-times"></i>
+                  </button>
+                </div>
+              </div>
+              
+              <!-- Étapes de traitement -->
+              <div id="translation-document-steps" class="mb-4 hidden">
+                <div class="bg-neutral-50 dark:bg-neutral-800/50 rounded-lg p-4">
+                  <h3 class="text-md font-medium mb-3">Progression de la traduction</h3>
+                  
+                  <!-- Étape 1: Initialisation -->
+                  <div class="flex items-center mb-2" id="translation-step-initialisation">
+                    <div class="w-6 h-6 rounded-full flex items-center justify-center mr-3 bg-neutral-200 dark:bg-neutral-700">
+                      <i class="fas fa-check text-xs text-white opacity-0"></i>
+                    </div>
+                    <div class="flex-1">
+                      <p class="text-sm font-medium">Initialisation</p>
+                      <p class="text-xs text-neutral-500 dark:text-neutral-400" id="translation-step-initialisation-status">En attente...</p>
+                    </div>
+                  </div>
+                  
+                  <!-- Étape 2: Prétraitement -->
+                  <div class="flex items-center mb-2" id="translation-step-pretraitement">
+                    <div class="w-6 h-6 rounded-full flex items-center justify-center mr-3 bg-neutral-200 dark:bg-neutral-700">
+                      <i class="fas fa-check text-xs text-white opacity-0"></i>
+                    </div>
+                    <div class="flex-1">
+                      <p class="text-sm font-medium">Prétraitement</p>
+                      <p class="text-xs text-neutral-500 dark:text-neutral-400" id="translation-step-pretraitement-status">En attente...</p>
+                    </div>
+                  </div>
+                  
+                  <!-- Étape 3: Traitement -->
+                  <div class="flex items-center mb-2" id="translation-step-traitement">
+                    <div class="w-6 h-6 rounded-full flex items-center justify-center mr-3 bg-neutral-200 dark:bg-neutral-700">
+                      <i class="fas fa-check text-xs text-white opacity-0"></i>
+                    </div>
+                    <div class="flex-1">
+                      <p class="text-sm font-medium">Traduction</p>
+                      <p class="text-xs text-neutral-500 dark:text-neutral-400" id="translation-step-traitement-status">En attente...</p>
+                      <div class="mt-2 w-full bg-neutral-200 dark:bg-neutral-700 rounded-full h-2 overflow-hidden">
+                        <div id="translation-document-progress" class="bg-primary-500 h-full text-xs text-center text-white leading-none rounded-full" style="width: 0%"></div>
+                      </div>
+                    </div>
+                  </div>
+                  
+                  <!-- Étape 4: Post-traitement -->
+                  <div class="flex items-center mb-2" id="translation-step-posttraitement">
+                    <div class="w-6 h-6 rounded-full flex items-center justify-center mr-3 bg-neutral-200 dark:bg-neutral-700">
+                      <i class="fas fa-check text-xs text-white opacity-0"></i>
+                    </div>
+                    <div class="flex-1">
+                      <p class="text-sm font-medium">Post-traitement</p>
+                      <p class="text-xs text-neutral-500 dark:text-neutral-400" id="translation-step-posttraitement-status">En attente...</p>
+                    </div>
+                  </div>
+                  
+                  <!-- Étape 5: Finalisation -->
+                  <div class="flex items-center" id="translation-step-finalisation">
+                    <div class="w-6 h-6 rounded-full flex items-center justify-center mr-3 bg-neutral-200 dark:bg-neutral-700">
+                      <i class="fas fa-check text-xs text-white opacity-0"></i>
+                    </div>
+                    <div class="flex-1">
+                      <p class="text-sm font-medium">Finalisation</p>
+                      <p class="text-xs text-neutral-500 dark:text-neutral-400" id="translation-step-finalisation-status">En attente...</p>
+                    </div>
+                  </div>
+                </div>
+              </div>
+              
+              <!-- Boutons d'action -->
+              <div class="flex flex-wrap gap-2">
+                <button id="translation-document-translate-btn" class="btn btn-primary">
+                  <i class="fas fa-language mr-2"></i> Traduire le document
+                </button>
+              </div>
+            </div>
+            
+            <!-- Résultats de la traduction -->
+            <div id="translation-results" class="card hidden">
+              <h2 class="text-lg font-semibold mb-4">Résultats de la traduction</h2>
+              <div id="translation-results-content" class="mb-4"></div>
+              <div class="flex justify-end">
+                <button id="translation-download-btn" class="btn btn-primary">
+                  <i class="fas fa-download mr-2"></i> Télécharger le document traduit
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
       </div>
     </div>
   </main>
@@ -666,6 +918,10 @@
   <script src="https://cdn.jsdelivr.net/npm/chart.js@3.9.1/dist/chart.min.js"></script>
   <!-- Marked.js pour le rendu Markdown -->
   <script src="https://cdn.jsdelivr.net/npm/marked@9.1.6/marked.min.js"></script>
+  
+  <!-- Conteneur pour les notifications -->
+  <div id="notifications-container"></div>
+  
   <!-- html2pdf.js pour l'export PDF -->
   <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
   <!-- Visualiseur de rapport Excel -->
@@ -677,5 +933,7 @@
   <script src="js/excel-agent.js"></script>
   <script src="js/mail-agent.js"></script>
   <script src="js/doc-agent.js"></script>
+  <script src="js/translation-agent.js"></script>
+  <script src="js/translation-agent-navigation.js"></script>
 </body>
 </html>

@@ -29,6 +29,63 @@ let themeService = null;
 let i18nService = null;
 let updaterService = null;
 let pluginLoader = null;
+
+// Importer les services
+try {
+  // Essayer d'abord le service principal
+  try {
+    const TranslationService = require('./translation-service');
+    // Vérifier si le service est déjà une instance ou s'il s'agit d'une classe
+    if (typeof TranslationService === 'object' && TranslationService !== null) {
+      translationService = TranslationService;
+      console.log('Service de traduction importé avec succès (instance)');
+    } else if (typeof TranslationService === 'function') {
+      // Si c'est une classe, l'instancier
+      translationService = new TranslationService();
+      console.log('Service de traduction instancié avec succès');
+    } else {
+      throw new Error('Le module de service de traduction n\'est pas valide');
+    }
+  } catch (mainServiceError) {
+    console.error('Erreur lors du chargement du service de traduction principal:', mainServiceError);
+    // Essayer le service alternatif dans le dossier services
+    try {
+      const TranslationServiceAlt = require('../services/translation-service');
+      translationService = new TranslationServiceAlt();
+      console.log('Service de traduction alternatif chargé avec succès');
+    } catch (altServiceError) {
+      console.error('Erreur lors du chargement du service de traduction alternatif:', altServiceError);
+      throw new Error('Impossible de charger un service de traduction valide');
+    }
+  }
+
+  // Vérifier explicitement que la méthode translateDocument est disponible
+  if (typeof translationService.translateDocument !== 'function') {
+    console.error('Méthode translateDocument manquante, tentative de correction...');
+    // Si nous avons la classe TranslationService, essayons d'accéder au prototype
+    const TranslationServiceClass = translationService.constructor;
+    if (typeof TranslationServiceClass === 'function' && 
+        typeof TranslationServiceClass.prototype.translateDocument === 'function') {
+      translationService.translateDocument = TranslationServiceClass.prototype.translateDocument.bind(translationService);
+      console.log('Méthode translateDocument correctement réattachée');
+    } else {
+      // Si toujours pas disponible, essayer de charger l'autre service
+      try {
+        const ServicesTranslationService = require('../services/translation-service');
+        const serviceInstance = new ServicesTranslationService();
+        translationService.translateDocument = serviceInstance.translateDocument.bind(translationService);
+        console.log('Méthode translateDocument empruntée au service alternatif');
+      } catch (e) {
+        console.error('Impossible de récupérer la méthode translateDocument:', e);
+      }
+    }
+  }
+  
+  // Vérification finale
+  console.log('translateDocument est disponible:', typeof translationService.translateDocument === 'function');
+} catch (error) {
+  console.error('Erreur lors de l\'importation du service de traduction:', error);
+}
 let servicesInitialized = false;
 
 // Fonction pour initialiser les services
@@ -79,8 +136,27 @@ function initializeServices() {
       }
       
       if (fs.existsSync(translationServicePath)) {
-        translationService = require(translationServicePath);
-        console.log('Service de traduction chargé');
+        try {
+          const TranslationServiceClass = require(translationServicePath);
+          if (typeof TranslationServiceClass === 'function') {
+            translationService = new TranslationServiceClass();
+          } else {
+            translationService = TranslationServiceClass;
+          }
+          console.log('Service de traduction chargé');
+          
+          // Vérifier que la méthode translateDocument est disponible
+          if (typeof translationService.translateDocument !== 'function') {
+            console.error('Méthode translateDocument non disponible dans le service chargé');
+            // Essayer d'initialiser le service si possible
+            if (typeof translationService.initialize === 'function') {
+              translationService.initialize();
+              console.log('Service de traduction initialisé');
+            }
+          }
+        } catch (e) {
+          console.error('Erreur lors du chargement du service de traduction:', e);
+        }
       }
       
       if (fs.existsSync(taskServicePath)) {
@@ -864,10 +940,128 @@ if (ipcMain) {
         throw new Error('Le service d\'intégration n\'est pas initialisé');
       }
       
-      return await integrationService.generateLetter(templateType, data);
+      const result = await integrationService.generateLetter(templateType, data);
+      return result;
     } catch (error) {
       console.error('Erreur lors de la génération de la lettre:', error);
-      throw error;
+      return {
+        success: false,
+        error: error.message
+      };
+    }
+  });
+
+  // Gestionnaires d'événements pour le service de traduction
+  ipcMain.handle('translate-text', async (event, text, targetLang, sourceLang = 'auto') => {
+    try {
+      if (!translationService) {
+        throw new Error('Le service de traduction n\'est pas initialisé');
+      }
+      
+      const result = await translationService.translateText(text, targetLang, sourceLang);
+      return result;
+    } catch (error) {
+      console.error('Erreur lors de la traduction du texte:', error);
+      return {
+        success: false,
+        error: error.message
+      };
+    }
+  });
+
+  ipcMain.handle('translate-document', async (event, filePath, targetLang, sourceLang = 'auto') => {
+    try {
+      if (!translationService) {
+        throw new Error('Le service de traduction n\'est pas initialisé');
+      }
+      
+      // Créer une fonction de callback pour suivre la progression
+      const progressCallback = (progress) => {
+        // Envoyer la progression à la fenêtre de rendu
+        if (mainWindow && !mainWindow.isDestroyed()) {
+          mainWindow.webContents.send('translation-progress', progress);
+        }
+      };
+      
+      const result = await translationService.translateDocument(filePath, targetLang, sourceLang, progressCallback);
+      return result;
+    } catch (error) {
+      console.error('Erreur lors de la traduction du document:', error);
+      return {
+        success: false,
+        error: error.message
+      };
+    }
+  });
+
+  ipcMain.handle('get-supported-languages', async () => {
+    try {
+      if (!translationService) {
+        throw new Error('Le service de traduction n\'est pas initialisé');
+      }
+      
+      return translationService.getSupportedLanguages();
+    } catch (error) {
+      console.error('Erreur lors de la récupération des langues supportées:', error);
+      return {
+        success: false,
+        error: error.message
+      };
+    }
+  });
+
+  ipcMain.handle('get-supported-file-types', async () => {
+    try {
+      if (!translationService) {
+        throw new Error('Le service de traduction n\'est pas initialisé');
+      }
+      
+      return translationService.getSupportedFileTypes();
+    } catch (error) {
+      console.error('Erreur lors de la récupération des types de fichiers supportés:', error);
+      return {
+        success: false,
+        error: error.message
+      };
+    }
+  });
+
+  // Gestionnaire pour ouvrir un dossier contenant un fichier
+  ipcMain.handle('openFolder', async (event, filePath) => {
+    try {
+      // Vérifier si le chemin existe
+      if (!fs.existsSync(filePath)) {
+        throw new Error(`Le chemin ${filePath} n'existe pas`);
+      }
+      
+      // Déterminer si le chemin est un fichier ou un dossier
+      const stats = fs.statSync(filePath);
+      let folderPath;
+      
+      if (stats.isFile()) {
+        // Si c'est un fichier, ouvrir le dossier parent
+        folderPath = path.dirname(filePath);
+      } else if (stats.isDirectory()) {
+        // Si c'est déjà un dossier, l'ouvrir directement
+        folderPath = filePath;
+      } else {
+        throw new Error(`Le chemin ${filePath} n'est ni un fichier ni un dossier`);
+      }
+      
+      // Ouvrir le dossier dans l'explorateur de fichiers du système
+      const opened = await shell.openPath(folderPath);
+      
+      if (opened !== '') {
+        throw new Error(`Erreur lors de l'ouverture du dossier: ${opened}`);
+      }
+      
+      return { success: true };
+    } catch (error) {
+      console.error('Erreur lors de l\'ouverture du dossier:', error);
+      return {
+        success: false,
+        error: error.message
+      };
     }
   });
 

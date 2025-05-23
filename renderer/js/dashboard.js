@@ -476,7 +476,9 @@ async function loadHistoryData() {
 }
 
 /**
- * Met à jour la vue d'historique avec les données récupérées
+ * Met à jour la vue d'historique avec les conversations et sessions récentes
+ * @param {Array} history - Liste des conversations
+ * @param {Array} sessions - Liste des sessions
  */
 function updateHistoryView(history, sessions) {
   // Récupérer le conteneur de l'historique
@@ -490,81 +492,91 @@ function updateHistoryView(history, sessions) {
     return;
   }
   
-  // Construire la liste des sessions
-  const sessionsContainer = historyView.querySelector('#history-sessions');
-  
-  if (sessionsContainer && sessions && sessions.length > 0) {
-    // Vider le conteneur
-    sessionsContainer.innerHTML = '';
-    
-    // Ajouter chaque session
-    sessions.forEach(session => {
-      const sessionDate = new Date(session.timestamp || Date.now());
-      const formattedDate = sessionDate.toLocaleDateString('fr-FR', {
-        day: '2-digit',
-        month: '2-digit',
-        year: 'numeric',
-        hour: '2-digit',
-        minute: '2-digit'
-      });
-      
-      // Créer un élément pour la session
-      const sessionElement = document.createElement('div');
-      sessionElement.className = 'border-b border-neutral-200 dark:border-neutral-700 pb-3 mb-3 last:border-0 last:mb-0 last:pb-0';
-      sessionElement.innerHTML = `
-        <div class="flex justify-between items-start">
-          <div>
-            <h3 class="text-md font-medium">${session.title || 'Session ' + formattedDate}</h3>
-            <p class="text-sm text-neutral-500 dark:text-neutral-400">${formattedDate}</p>
-          </div>
-          <button class="btn btn-sm btn-outline py-1 load-session-btn" data-session-id="${session.id}">
-            Charger
-          </button>
-        </div>
-        <p class="text-sm mt-2">${session.summary || 'Session avec ' + (session.messages ? session.messages.length : 0) + ' messages'}</p>
-      `;
-      
-      // Ajouter un écouteur d'événement pour le bouton de chargement
-      const loadButton = sessionElement.querySelector('.load-session-btn');
-      if (loadButton) {
-        loadButton.addEventListener('click', () => loadSession(session.id));
-      }
-      
-      sessionsContainer.appendChild(sessionElement);
-    });
-  } else if (sessionsContainer) {
-    sessionsContainer.innerHTML = '<p class="text-center text-neutral-500 dark:text-neutral-400 py-6">Aucune session disponible</p>';
-  }
-  
-  // Construire la liste des conversations récentes
+  // Construire la liste des conversations récentes avec le nouveau design
   const conversationsContainer = historyView.querySelector('#history-conversations');
   
-  if (conversationsContainer && history && history.length > 0) {
+  if (conversationsContainer) {
     // Vider le conteneur
     conversationsContainer.innerHTML = '';
     
-    // Ajouter chaque conversation
-    history.forEach(convo => {
-      const convoDate = new Date(convo.timestamp || Date.now());
-      const timeAgo = getTimeAgo(convoDate);
+    // Ajouter un message si aucune conversation n'est disponible
+    if (!history || history.length === 0) {
+      conversationsContainer.innerHTML = `
+        <div id="history-empty-message" class="col-span-full flex flex-col items-center justify-center py-16">
+          <div class="w-20 h-20 rounded-full bg-neutral-100 dark:bg-neutral-800 flex items-center justify-center mb-6">
+            <i class="fas fa-comment-slash text-neutral-400 dark:text-neutral-600 text-3xl"></i>
+          </div>
+          <p class="text-lg text-neutral-500 dark:text-neutral-400 text-center mb-4">Aucune conversation disponible</p>
+          <button id="start-new-conversation" class="btn btn-primary">
+            <i class="fas fa-plus mr-2"></i>Démarrer une conversation
+          </button>
+        </div>
+      `;
       
-      // Déterminer l'icône en fonction du type de conversation
+      // Ajouter un écouteur d'événement pour le bouton de nouvelle conversation
+      const newConvoButton = conversationsContainer.querySelector('#start-new-conversation');
+      if (newConvoButton) {
+        newConvoButton.addEventListener('click', () => {
+          if (window.navigation && typeof window.navigation.navigateTo === 'function') {
+            window.navigation.navigateTo('chat');
+          }
+        });
+      }
+      
+      // Mettre à jour les informations de pagination
+      updatePaginationInfo(0);
+      return;
+    }
+    
+    // Ajouter un élément pour le message vide (masqué par défaut)
+    const emptyMessageElement = document.createElement('div');
+    emptyMessageElement.id = 'history-empty-message';
+    emptyMessageElement.className = 'col-span-full flex flex-col items-center justify-center py-16';
+    emptyMessageElement.style.display = 'none';
+    emptyMessageElement.innerHTML = `
+      <div class="w-20 h-20 rounded-full bg-neutral-100 dark:bg-neutral-800 flex items-center justify-center mb-6">
+        <i class="fas fa-search text-neutral-400 dark:text-neutral-600 text-3xl"></i>
+      </div>
+      <p class="text-lg text-neutral-500 dark:text-neutral-400 text-center">Aucune conversation ne correspond à votre recherche</p>
+    `;
+    conversationsContainer.appendChild(emptyMessageElement);
+    
+    // Ajouter chaque conversation avec le nouveau design moderne
+    history.forEach(convo => {
+      // S'assurer que la conversation a un timestamp valide
+      const timestamp = convo.timestamp || convo.createdAt || Date.now();
+      const convoDate = new Date(timestamp);
+      
+      // Formater la date pour l'affichage
+      const timeAgo = getTimeAgo(convoDate);
+      const fullDateTime = formatDateTime(convoDate);
+      
+      // Déterminer l'icône et la couleur en fonction du type de conversation
       let icon = 'comment-alt';
       let iconColor = 'primary';
+      let agentType = 'chat';
       
       if (convo.agent === 'excel') {
         icon = 'file-excel';
         iconColor = 'secondary';
+        agentType = 'excel';
       } else if (convo.agent === 'document') {
         icon = 'file-pdf';
         iconColor = 'red';
+        agentType = 'document';
       } else if (convo.agent === 'mail') {
         icon = 'envelope';
         iconColor = 'green';
+        agentType = 'mail';
+      } else if (convo.agent === 'translation') {
+        icon = 'language';
+        iconColor = 'blue';
+        agentType = 'translation';
       }
       
       // Trouver le premier message de l'utilisateur pour l'utiliser comme titre
       let conversationTitle = 'Conversation';
+      let lastMessage = 'Aucun message';
       
       // Si nous avons un historique de messages, utiliser la première question de l'utilisateur comme titre
       if (convo.conversationHistory && convo.conversationHistory.length > 0) {
@@ -576,63 +588,91 @@ function updateHistoryView(history, sessions) {
           conversationTitle = content.length > 40 
             ? content.substring(0, 40) + '...' 
             : content;
+          
+          // Utiliser le dernier message comme aperçu
+          const lastMsg = convo.conversationHistory[convo.conversationHistory.length - 1];
+          if (lastMsg && lastMsg.content) {
+            const lastContent = lastMsg.content.trim();
+            lastMessage = lastContent.length > 60
+              ? lastContent.substring(0, 60) + '...'
+              : lastContent;
+          }
         }
       }
       
-      // Créer un élément pour la conversation
+      // S'assurer que l'ID de session est valide
+      const sessionId = convo.sessionId || convo._id || convo.id || '';
+      
+      // Créer un élément pour la conversation avec le nouveau design moderne
       const convoElement = document.createElement('div');
-      convoElement.className = 'flex items-start p-3 border-b border-neutral-200 dark:border-neutral-700 hover:bg-neutral-50 dark:hover:bg-neutral-800/50 cursor-pointer';
-      convoElement.setAttribute('data-session-id', convo.sessionId || '');
+      convoElement.className = 'bg-white dark:bg-neutral-800 rounded-lg shadow-sm hover:shadow-md transition-all duration-200 overflow-hidden';
+      convoElement.setAttribute('data-session-id', sessionId);
+      convoElement.setAttribute('data-timestamp', timestamp);
+      convoElement.setAttribute('data-agent-type', agentType);
+      convoElement.setAttribute('data-title', conversationTitle);
+      convoElement.setAttribute('data-content', lastMessage);
+      
       convoElement.innerHTML = `
-        <div class="flex-shrink-0 h-10 w-10 rounded-full bg-${iconColor}-100 dark:bg-${iconColor}-900/30 flex items-center justify-center text-${iconColor}-600 dark:text-${iconColor}-400">
-          <i class="fas fa-${icon}"></i>
-        </div>
-        <div class="ml-3 flex-1">
-          <div class="flex justify-between">
-            <p class="text-sm font-medium">${conversationTitle}</p>
-            <p class="text-xs text-neutral-500 dark:text-neutral-400">${timeAgo}</p>
+        <div class="p-4 cursor-pointer">
+          <div class="flex items-center justify-between mb-3">
+            <div class="flex items-center">
+              <div class="flex-shrink-0 h-10 w-10 rounded-full bg-${iconColor}-100 dark:bg-${iconColor}-900/30 flex items-center justify-center text-${iconColor}-600 dark:text-${iconColor}-400">
+                <i class="fas fa-${icon}"></i>
+              </div>
+              <span class="text-xs font-medium ml-2 px-2 py-1 rounded-full bg-${iconColor}-100 dark:bg-${iconColor}-900/30 text-${iconColor}-600 dark:text-${iconColor}-400">
+                ${agentType.charAt(0).toUpperCase() + agentType.slice(1)}
+              </span>
+            </div>
+            <div class="flex items-center text-xs text-neutral-500 dark:text-neutral-400" title="${fullDateTime}">
+              <i class="fas fa-clock mr-1"></i>
+              <span>${timeAgo}</span>
+            </div>
           </div>
-          <p class="text-sm text-neutral-600 dark:text-neutral-300 truncate mt-1">${convo.lastMessage || 'Aucun message'}</p>
+          
+          <h3 class="text-md font-medium text-neutral-800 dark:text-white mb-2 line-clamp-1">${conversationTitle}</h3>
+          <p class="text-sm text-neutral-600 dark:text-neutral-400 truncate mb-3">${convo.lastMessage || lastMessage}</p>
+          
+          <div class="flex justify-between items-center">
+            <span class="text-xs text-neutral-500 dark:text-neutral-400">
+              ${convo.conversationHistory ? convo.conversationHistory.length : 0} message${convo.conversationHistory && convo.conversationHistory.length !== 1 ? 's' : ''}
+            </span>
+            <button class="btn btn-xs btn-primary load-conversation-btn" data-session-id="${sessionId}">
+              Ouvrir
+            </button>
+          </div>
         </div>
       `;
       
       // Ajouter un écouteur d'événement pour charger la conversation quand on clique dessus
-      convoElement.addEventListener('click', () => {
-        const sessionId = convoElement.getAttribute('data-session-id');
-        if (!sessionId) {
-          console.error("ID de session non disponible pour cette conversation");
-          return;
-        }
+      convoElement.addEventListener('click', (e) => {
+        // Ne pas déclencher si on a cliqué sur le bouton
+        if (e.target.closest('.load-conversation-btn')) return;
         
-        // Naviguer vers la vue de chat
-        if (window.navigation && typeof window.navigation.navigateTo === 'function') {
-          window.navigation.navigateTo('chat');
-        }
-        
-        // Charger la conversation
-        if (window.api && typeof window.api.loadContext === 'function') {
-          window.api.loadContext(sessionId)
-            .then(() => {
-              console.log(`Conversation ${sessionId} chargée avec succès`);
-            })
-            .catch(error => {
-              console.error(`Erreur lors du chargement de la conversation ${sessionId}:`, error);
-            });
-        }
+        // Charger la session
+        loadSession(sessionId);
       });
+      
+      // Ajouter un écouteur d'événement spécifique pour le bouton
+      const loadButton = convoElement.querySelector('.load-conversation-btn');
+      if (loadButton) {
+        loadButton.addEventListener('click', (e) => {
+          e.stopPropagation(); // Empêcher la propagation au parent
+          loadSession(sessionId);
+        });
+      }
       
       conversationsContainer.appendChild(convoElement);
     });
-  } else if (conversationsContainer) {
-    conversationsContainer.innerHTML = '<p class="text-center text-neutral-500 dark:text-neutral-400 py-6">Aucune conversation disponible</p>';
+  } else {
+    console.error("Conteneur de conversations non trouvé");
   }
 }
 
 /**
- * Crée la vue d'historique si elle n'existe pas
+ * Crée la vue d'historique avec un design simple et moderne
  */
 function createHistoryView() {
-  console.log("Création de la vue d'historique...");
+  console.log("Création de la vue d'historique avec design moderne...");
   
   // Récupérer le conteneur de contenu
   const contentContainer = document.getElementById('content');
@@ -645,38 +685,123 @@ function createHistoryView() {
   // Créer l'élément de vue d'historique
   const historyView = document.createElement('div');
   historyView.id = 'history-view';
-  historyView.className = 'p-6';
+  historyView.className = 'h-full flex flex-col';
   historyView.style.display = 'none';
   
-  // Structure HTML de la vue d'historique
+  // Structure HTML de la vue d'historique avec un design simple et moderne
   historyView.innerHTML = `
-    <h1 class="text-2xl font-bold mb-6">Historique</h1>
-    
-    <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
-      <!-- Sessions passées -->
-      <div class="md:col-span-1">
-        <div class="card">
-          <h2 class="text-lg font-semibold mb-4">Sessions</h2>
-          <div id="history-sessions" class="space-y-4">
-            <p class="text-center text-neutral-500 dark:text-neutral-400 py-6">Chargement des sessions...</p>
+    <div class="flex-none p-6 border-b border-neutral-200 dark:border-neutral-800 bg-white dark:bg-neutral-900">
+      <div class="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
+        <h1 class="text-2xl font-bold text-neutral-800 dark:text-white">Historique</h1>
+        
+        <div class="flex items-center space-x-2">
+          <div class="relative flex-grow md:w-64">
+            <input type="text" id="history-search" placeholder="Rechercher..." 
+              class="w-full pl-10 pr-4 py-2 rounded-lg border border-neutral-300 dark:border-neutral-700 
+              bg-white dark:bg-neutral-800 focus:outline-none focus:ring-2 focus:ring-primary-500">
+            <div class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+              <i class="fas fa-search text-neutral-400"></i>
+            </div>
           </div>
+          
+          <button id="history-view-refresh" class="btn btn-icon btn-outline">
+            <i class="fas fa-sync-alt"></i>
+          </button>
+          
+          <button id="history-view-new-chat" class="btn btn-primary">
+            <i class="fas fa-plus mr-2"></i>Nouvelle
+          </button>
         </div>
       </div>
       
-      <!-- Conversations récentes -->
-      <div class="md:col-span-2">
-        <div class="card">
-          <h2 class="text-lg font-semibold mb-4">Conversations récentes</h2>
-          <div id="history-conversations" class="max-h-[500px] overflow-y-auto divide-y divide-neutral-200 dark:divide-neutral-700">
-            <p class="text-center text-neutral-500 dark:text-neutral-400 py-6">Chargement des conversations...</p>
+      <!-- Filtres rapides -->
+      <div class="flex flex-wrap gap-2 mt-4">
+        <button class="history-filter-btn px-3 py-1 rounded-full text-sm font-medium bg-primary-100 text-primary-800 dark:bg-primary-900/30 dark:text-primary-400 active" data-filter="all">Toutes</button>
+        <button class="history-filter-btn px-3 py-1 rounded-full text-sm font-medium bg-neutral-100 text-neutral-800 dark:bg-neutral-800 dark:text-neutral-300" data-filter="chat">
+          <i class="fas fa-comment-alt mr-1"></i>Chat
+        </button>
+        <button class="history-filter-btn px-3 py-1 rounded-full text-sm font-medium bg-neutral-100 text-neutral-800 dark:bg-neutral-800 dark:text-neutral-300" data-filter="excel">
+          <i class="fas fa-file-excel mr-1"></i>Excel
+        </button>
+        <button class="history-filter-btn px-3 py-1 rounded-full text-sm font-medium bg-neutral-100 text-neutral-800 dark:bg-neutral-800 dark:text-neutral-300" data-filter="document">
+          <i class="fas fa-file-pdf mr-1"></i>Document
+        </button>
+        <button class="history-filter-btn px-3 py-1 rounded-full text-sm font-medium bg-neutral-100 text-neutral-800 dark:bg-neutral-800 dark:text-neutral-300" data-filter="mail">
+          <i class="fas fa-envelope mr-1"></i>Email
+        </button>
+      </div>
+    </div>
+    
+    <!-- Liste des conversations -->
+    <div class="flex-grow overflow-y-auto bg-neutral-50 dark:bg-neutral-900/50">
+      <div id="history-conversations" class="p-4 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+        <div class="flex justify-center items-center py-12 col-span-full">
+          <div class="flex flex-col items-center">
+            <div class="animate-spin rounded-full h-8 w-8 border-b-2 border-primary-500 mb-4"></div>
+            <p class="text-neutral-500 dark:text-neutral-400">Chargement des conversations...</p>
           </div>
         </div>
+      </div>
+    </div>
+    
+    <!-- Pagination -->
+    <div class="flex-none p-4 border-t border-neutral-200 dark:border-neutral-800 bg-white dark:bg-neutral-900">
+      <div class="flex justify-between items-center">
+        <button id="history-prev-page" class="btn btn-sm btn-outline" disabled>
+          <i class="fas fa-chevron-left mr-2"></i>Précédent
+        </button>
+        <span id="history-page-info" class="text-sm text-neutral-500 dark:text-neutral-400">Page 1 sur 1</span>
+        <button id="history-next-page" class="btn btn-sm btn-outline" disabled>
+          Suivant<i class="fas fa-chevron-right ml-2"></i>
+        </button>
       </div>
     </div>
   `;
   
   // Ajouter la vue au conteneur de contenu
   contentContainer.appendChild(historyView);
+  
+  // Ajouter les écouteurs d'événements pour les boutons
+  const refreshButton = historyView.querySelector('#history-view-refresh');
+  if (refreshButton) {
+    refreshButton.addEventListener('click', () => {
+      loadHistoryData();
+      showToast('Actualisation', 'Historique actualisé avec succès', 'success');
+    });
+  }
+  
+  const newChatButton = historyView.querySelector('#history-view-new-chat');
+  if (newChatButton) {
+    newChatButton.addEventListener('click', () => {
+      if (window.navigation && typeof window.navigation.navigateTo === 'function') {
+        window.navigation.navigateTo('chat');
+      }
+    });
+  }
+  
+  // Ajouter les écouteurs d'événements pour les filtres
+  const filterButtons = historyView.querySelectorAll('.history-filter-btn');
+  filterButtons.forEach(button => {
+    button.addEventListener('click', () => {
+      // Retirer la classe active de tous les boutons
+      filterButtons.forEach(btn => btn.classList.remove('active'));
+      // Ajouter la classe active au bouton cliqué
+      button.classList.add('active');
+      
+      // Appliquer le filtre
+      const filter = button.getAttribute('data-filter');
+      applyHistoryFilter(filter);
+    });
+  });
+  
+  // Ajouter l'écouteur d'événement pour la recherche
+  const searchInput = historyView.querySelector('#history-search');
+  if (searchInput) {
+    searchInput.addEventListener('input', debounce(() => {
+      const searchTerm = searchInput.value.trim().toLowerCase();
+      applyHistorySearch(searchTerm);
+    }, 300));
+  }
   
   console.log("Vue d'historique créée avec succès");
   
@@ -687,27 +812,54 @@ function createHistoryView() {
 /**
  * Charge une session spécifique
  */
+/**
+ * Charge une session de conversation à partir de son ID
+ * @param {string} sessionId - Identifiant de la session à charger
+ * @returns {Promise<boolean>} - True si la session a été chargée avec succès, false sinon
+ */
 async function loadSession(sessionId) {
+  // Vérifier que l'ID de session est valide
+  if (!sessionId) {
+    console.error("Impossible de charger la session: ID de session manquant");
+    showToast("Erreur", "Impossible de charger la conversation: identifiant manquant", "error");
+    return false;
+  }
+  
   try {
     console.log(`Chargement de la session ${sessionId}...`);
+    
+    // Afficher un indicateur de chargement
+    const loadingToastId = showToast("Chargement", "Chargement de la conversation en cours...", "info", true);
     
     // Vérifier si l'API est disponible
     if (!window.api) {
       console.error("API non disponible pour charger la session");
-      return;
+      hideToast(loadingToastId);
+      showToast("Erreur", "Service de conversation non disponible", "error");
+      return false;
     }
     
     // Appeler l'API pour charger la session
     await window.api.loadSession(sessionId);
     
+    // Masquer l'indicateur de chargement
+    hideToast(loadingToastId);
+    
     // Naviguer vers la vue de chat
     if (window.navigation && typeof window.navigation.navigateTo === 'function') {
       window.navigation.navigateTo('chat');
+      showToast("Succès", "Conversation chargée avec succès", "success");
+    } else {
+      console.error("Navigation non disponible pour accéder à la vue de chat");
+      showToast("Avertissement", "Conversation chargée mais impossible d'afficher la vue de chat", "warning");
     }
     
     console.log(`Session ${sessionId} chargée avec succès`);
+    return true;
   } catch (error) {
     console.error(`Erreur lors du chargement de la session ${sessionId}:`, error);
+    showToast("Erreur", `Impossible de charger la conversation: ${error.message || 'Erreur inconnue'}`  , "error");
+    return false;
   }
 }
 
@@ -751,15 +903,48 @@ function setupDashboardListeners() {
 /**
  * Convertit une date en texte "il y a X temps"
  */
-function getTimeAgo(date) {
+/**
+ * Formate une date en texte relatif (il y a X minutes, etc.)
+ * @param {Date|string} dateInput - Date à formater (objet Date ou chaîne ISO)
+ * @returns {string} - Texte formaté
+ */
+function getTimeAgo(dateInput) {
+  // S'assurer que nous avons un objet Date valide
+  let date;
+  if (typeof dateInput === 'string') {
+    // Essayer de parser la chaîne ISO
+    try {
+      date = new Date(dateInput);
+    } catch (e) {
+      console.error('Erreur lors du parsing de la date:', e);
+      date = new Date(); // Fallback à la date actuelle
+    }
+  } else if (dateInput instanceof Date) {
+    date = dateInput;
+  } else {
+    console.error('Format de date non valide:', dateInput);
+    date = new Date(); // Fallback à la date actuelle
+  }
+  
+  // Vérifier si la date est valide
+  if (isNaN(date.getTime())) {
+    console.error('Date invalide:', dateInput);
+    return 'Date inconnue';
+  }
+  
   const now = new Date();
   const diffMs = now - date;
-  const diffSec = Math.round(diffMs / 1000);
-  const diffMin = Math.round(diffSec / 60);
-  const diffHour = Math.round(diffMin / 60);
-  const diffDay = Math.round(diffHour / 24);
-  const diffWeek = Math.round(diffDay / 7);
-  const diffMonth = Math.round(diffDay / 30);
+  const diffSec = Math.floor(diffMs / 1000);
+  const diffMin = Math.floor(diffSec / 60);
+  const diffHour = Math.floor(diffMin / 60);
+  const diffDay = Math.floor(diffHour / 24);
+  const diffWeek = Math.floor(diffDay / 7);
+  const diffMonth = Math.floor(diffDay / 30);
+  
+  // Si la date est dans le futur (peut arriver si les horloges ne sont pas synchronisées)
+  if (diffMs < 0) {
+    return formatDateTime(date); // Afficher la date complète
+  }
   
   if (diffSec < 60) {
     return "À l'instant";
@@ -772,8 +957,140 @@ function getTimeAgo(date) {
   } else if (diffWeek < 4) {
     return `Il y a ${diffWeek} semaine${diffWeek > 1 ? 's' : ''}`;
   } else {
-    return `Il y a ${diffMonth} mois`;
+    // Pour les dates plus anciennes, afficher la date complète
+    return formatDateTime(date);
   }
+}
+
+/**
+ * Formate une date en format lisible
+ * @param {Date|string} dateInput - Date à formater
+ * @returns {string} - Date formatée
+ */
+function formatDateTime(dateInput) {
+  // S'assurer que nous avons un objet Date valide
+  let date;
+  if (typeof dateInput === 'string') {
+    try {
+      date = new Date(dateInput);
+    } catch (e) {
+      console.error('Erreur lors du parsing de la date:', e);
+      return 'Date inconnue';
+    }
+  } else if (dateInput instanceof Date) {
+    date = dateInput;
+  } else {
+    console.error('Format de date non valide:', dateInput);
+    return 'Date inconnue';
+  }
+  
+  // Vérifier si la date est valide
+  if (isNaN(date.getTime())) {
+    console.error('Date invalide:', dateInput);
+    return 'Date inconnue';
+  }
+  
+  // Formater la date et l'heure
+  return date.toLocaleDateString('fr-FR', {
+    day: '2-digit',
+    month: '2-digit',
+    year: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit'
+  });
+}
+
+/**
+ * Affiche une notification toast à l'utilisateur
+ * @param {string} title - Titre de la notification
+ * @param {string} message - Message à afficher
+ * @param {string} type - Type de notification (success, error, warning, info)
+ * @param {boolean} persistent - Si true, la notification ne disparaitra pas automatiquement
+ * @returns {string} - ID unique de la notification
+ */
+function showToast(title, message, type = 'info', persistent = false) {
+  // Générer un ID unique pour cette notification
+  const toastId = 'toast-' + Date.now() + '-' + Math.floor(Math.random() * 1000);
+  
+  // Déterminer l'icône en fonction du type
+  let icon = 'info-circle';
+  let bgColor = 'bg-blue-100 dark:bg-blue-900/30';
+  let textColor = 'text-blue-600 dark:text-blue-400';
+  
+  if (type === 'success') {
+    icon = 'check-circle';
+    bgColor = 'bg-green-100 dark:bg-green-900/30';
+    textColor = 'text-green-600 dark:text-green-400';
+  } else if (type === 'error') {
+    icon = 'exclamation-circle';
+    bgColor = 'bg-red-100 dark:bg-red-900/30';
+    textColor = 'text-red-600 dark:text-red-400';
+  } else if (type === 'warning') {
+    icon = 'exclamation-triangle';
+    bgColor = 'bg-yellow-100 dark:bg-yellow-900/30';
+    textColor = 'text-yellow-600 dark:text-yellow-400';
+  }
+  
+  // Créer le conteneur de notifications s'il n'existe pas
+  let toastContainer = document.getElementById('toast-container');
+  if (!toastContainer) {
+    toastContainer = document.createElement('div');
+    toastContainer.id = 'toast-container';
+    toastContainer.className = 'fixed top-4 right-4 z-50 flex flex-col gap-2';
+    document.body.appendChild(toastContainer);
+  }
+  
+  // Créer l'élément toast
+  const toastElement = document.createElement('div');
+  toastElement.id = toastId;
+  toastElement.className = `flex items-center p-4 mb-2 rounded-lg shadow-md bg-white dark:bg-neutral-800 border-l-4 border-${type === 'info' ? 'blue' : type === 'success' ? 'green' : type === 'warning' ? 'yellow' : 'red'}-500 transform transition-all duration-300 ease-in-out translate-x-0 opacity-100`;
+  toastElement.innerHTML = `
+    <div class="flex-shrink-0 h-8 w-8 rounded-full ${bgColor} flex items-center justify-center ${textColor} mr-3">
+      <i class="fas fa-${icon}"></i>
+    </div>
+    <div class="flex-1">
+      <h4 class="text-sm font-medium">${title}</h4>
+      <p class="text-xs text-neutral-600 dark:text-neutral-300">${message}</p>
+    </div>
+    <button class="ml-2 text-neutral-400 hover:text-neutral-600 dark:hover:text-neutral-200" aria-label="Fermer" data-toast-id="${toastId}">
+      <i class="fas fa-times"></i>
+    </button>
+  `;
+  
+  // Ajouter le toast au conteneur
+  toastContainer.appendChild(toastElement);
+  
+  // Ajouter un écouteur d'événement pour le bouton de fermeture
+  const closeButton = toastElement.querySelector(`button[data-toast-id="${toastId}"]`);
+  if (closeButton) {
+    closeButton.addEventListener('click', () => hideToast(toastId));
+  }
+  
+  // Faire disparaître automatiquement le toast après 5 secondes si non persistent
+  if (!persistent) {
+    setTimeout(() => hideToast(toastId), 5000);
+  }
+  
+  return toastId;
+}
+
+/**
+ * Masque une notification toast
+ * @param {string} toastId - ID de la notification à masquer
+ */
+function hideToast(toastId) {
+  const toastElement = document.getElementById(toastId);
+  if (!toastElement) return;
+  
+  // Animer la disparition
+  toastElement.classList.add('translate-x-full', 'opacity-0');
+  
+  // Supprimer l'élément après l'animation
+  setTimeout(() => {
+    if (toastElement && toastElement.parentNode) {
+      toastElement.parentNode.removeChild(toastElement);
+    }
+  }, 300);
 }
 
 /**
@@ -798,8 +1115,8 @@ function updateRecentConversations(history) {
     return;
   }
   
-  // Prendre les 5 plus récentes conversations
-  const recentConversations = history.slice(0, 5);
+  // Prendre les 4 plus récentes conversations
+  const recentConversations = history.slice(0, 4);
   
   recentConversations.forEach(conversation => {
     // Trouver le premier message de l'utilisateur pour l'utiliser comme titre
@@ -811,10 +1128,10 @@ function updateRecentConversations(history) {
       // Chercher le premier message de l'utilisateur
       const userMessages = conversation.conversationHistory.filter(msg => msg.role === 'user');
       if (userMessages && userMessages.length > 0 && userMessages[0].content) {
-        // Limiter la longueur du titre à 30 caractères
+        // Limiter la longueur du titre à 20 caractères
         const content = userMessages[0].content.trim();
-        conversationTitle = content.length > 30 
-          ? content.substring(0, 30) + '...' 
+        conversationTitle = content.length > 20 
+          ? content.substring(0, 20) + '...' 
           : content;
       }
     }
@@ -835,7 +1152,7 @@ function updateRecentConversations(history) {
     conversationElement.innerHTML = `
       <a href="#chat" class="sidebar-item" data-session-id="${sessionId}">
         <i class="fas fa-${icon} mr-3"></i>
-        <span>${conversationTitle}</span>
+        <span class="truncate">${conversationTitle}</span>
       </a>
     `;
     
@@ -867,9 +1184,116 @@ function updateRecentConversations(history) {
   });
 }
 
+/**
+ * Applique un filtre sur l'historique des conversations
+ * @param {string} filter - Le filtre à appliquer (all, excel, document, mail, chat)
+ */
+function applyHistoryFilter(filter) {
+  const conversationElements = document.querySelectorAll('#history-conversations .conversation-item');
+  const searchTerm = document.getElementById('history-search')?.value.trim().toLowerCase() || '';
+  
+  // Si aucun élément n'est trouvé, ne rien faire
+  if (!conversationElements || conversationElements.length === 0) return;
+  
+  let visibleCount = 0;
+  
+  conversationElements.forEach(element => {
+    const agentType = element.getAttribute('data-agent-type') || '';
+    const title = element.getAttribute('data-title')?.toLowerCase() || '';
+    const content = element.getAttribute('data-content')?.toLowerCase() || '';
+    
+    // Vérifier si l'élément correspond au filtre et à la recherche
+    const matchesFilter = filter === 'all' || agentType === filter;
+    const matchesSearch = searchTerm === '' || 
+                         title.includes(searchTerm) || 
+                         content.includes(searchTerm);
+    
+    // Afficher ou masquer l'élément en fonction du filtre et de la recherche
+    if (matchesFilter && matchesSearch) {
+      element.style.display = '';
+      visibleCount++;
+    } else {
+      element.style.display = 'none';
+    }
+  });
+  
+  // Afficher un message si aucune conversation ne correspond aux critères
+  const emptyMessage = document.getElementById('history-empty-message');
+  if (emptyMessage) {
+    if (visibleCount === 0) {
+      emptyMessage.style.display = '';
+      if (searchTerm) {
+        emptyMessage.textContent = `Aucune conversation ne correspond à "${searchTerm}"`;
+      } else {
+        emptyMessage.textContent = `Aucune conversation de type "${filter}"`;
+      }
+    } else {
+      emptyMessage.style.display = 'none';
+    }
+  }
+  
+  // Mettre à jour les informations de pagination
+  updatePaginationInfo(visibleCount);
+}
+
+/**
+ * Applique une recherche sur l'historique des conversations
+ * @param {string} searchTerm - Le terme de recherche
+ */
+function applyHistorySearch(searchTerm) {
+  // Récupérer le filtre actif
+  const activeFilterButton = document.querySelector('.history-filter-btn.active');
+  const filter = activeFilterButton ? activeFilterButton.getAttribute('data-filter') : 'all';
+  
+  // Appliquer le filtre avec le terme de recherche
+  applyHistoryFilter(filter);
+}
+
+/**
+ * Met à jour les informations de pagination
+ * @param {number} visibleCount - Nombre d'éléments visibles
+ */
+function updatePaginationInfo(visibleCount) {
+  const pageInfoElement = document.getElementById('history-page-info');
+  const prevButton = document.getElementById('history-prev-page');
+  const nextButton = document.getElementById('history-next-page');
+  
+  if (pageInfoElement) {
+    if (visibleCount === 0) {
+      pageInfoElement.textContent = 'Aucun résultat';
+    } else {
+      pageInfoElement.textContent = `${visibleCount} conversation${visibleCount > 1 ? 's' : ''}`;
+    }
+  }
+  
+  // Désactiver les boutons de pagination pour l'instant (implémentation future)
+  if (prevButton) prevButton.disabled = true;
+  if (nextButton) nextButton.disabled = true;
+}
+
+/**
+ * Fonction utilitaire pour limiter la fréquence d'exécution d'une fonction
+ * @param {Function} func - La fonction à exécuter
+ * @param {number} wait - Le délai d'attente en millisecondes
+ * @returns {Function} - La fonction avec délai
+ */
+function debounce(func, wait) {
+  let timeout;
+  return function executedFunction(...args) {
+    const later = () => {
+      clearTimeout(timeout);
+      func(...args);
+    };
+    clearTimeout(timeout);
+    timeout = setTimeout(later, wait);
+  };
+}
+
 // Exporter les fonctions pour les rendre disponibles dans d'autres modules
 window.dashboard = {
   updateDashboardData,
   loadHistoryData,
-  updateRecentConversations
+  updateRecentConversations,
+  applyHistoryFilter,
+  applyHistorySearch
 };

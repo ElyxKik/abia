@@ -19,6 +19,7 @@ function navigateTo(viewName) {
   const excelAgentView = document.getElementById('excel-agent-view');
   const mailAgentView = document.getElementById('mail-agent-view');
   const docAgentView = document.getElementById('doc-agent-view');
+  const translationAgentView = document.getElementById('translation-agent-view');
   
   // Vérifier que la vue dashboard existe au minimum
   if (!dashboardView) {
@@ -45,6 +46,7 @@ function navigateTo(viewName) {
   if (excelAgentView) excelAgentView.style.display = 'none';
   if (mailAgentView) mailAgentView.style.display = 'none';
   if (docAgentView) docAgentView.style.display = 'none';
+  if (translationAgentView) translationAgentView.style.display = 'none';
   
   // Afficher la vue demandée
   switch (viewName) {
@@ -109,6 +111,15 @@ function navigateTo(viewName) {
         docAgentView.style.display = 'flex';
       } else {
         console.warn("Vue agent Documents non disponible, affichage du tableau de bord");
+        dashboardView.style.display = 'block';
+      }
+      break;
+      
+    case 'translation-agent':
+      if (translationAgentView) {
+        translationAgentView.style.display = 'flex';
+      } else {
+        console.warn("Vue agent Traduction non disponible, affichage du tableau de bord");
         dashboardView.style.display = 'block';
       }
       break;

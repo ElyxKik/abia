@@ -23,6 +23,15 @@ contextBridge.exposeInMainWorld('api', {
   onOpenSettings: (callback) => ipcRenderer.on('open-settings', callback),
   onToggleDarkMode: (callback) => ipcRenderer.on('toggle-dark-mode', (_, value) => callback(value)),
   onChangeLanguage: (callback) => ipcRenderer.on('change-language', (_, value) => callback(value)),
+  onTranslationProgress: (callback) => {
+    // S'assurer que tout ancien écouteur est supprimé pour éviter les doublons
+    ipcRenderer.removeAllListeners('translation-progress');
+    // Ajouter le nouvel écouteur
+    ipcRenderer.on('translation-progress', (_, progress) => {
+      console.log('Progression reçue dans preload:', progress);
+      callback(progress);
+    });
+  },
   
   // Remove event listeners
   removeAllListeners: (channel) => {
@@ -38,6 +47,13 @@ contextBridge.exposeInMainWorld('api', {
   generateExcelReport: (filePath, instructions, options) => ipcRenderer.invoke('generate-excel-report', filePath, instructions, options),
   processDocument: (filePath, query) => ipcRenderer.invoke('process-document', filePath, query),
   generateLetter: (templateType, data) => ipcRenderer.invoke('generate-letter', templateType, data),
+  
+  // Translation service methods
+  translateText: (text, targetLang, sourceLang) => ipcRenderer.invoke('translate-text', text, targetLang, sourceLang),
+  translateDocument: (filePath, targetLang, sourceLang) => ipcRenderer.invoke('translate-document', filePath, targetLang, sourceLang),
+  getSupportedLanguages: () => ipcRenderer.invoke('get-supported-languages'),
+  getSupportedFileTypes: () => ipcRenderer.invoke('get-supported-file-types'),
+  openFolder: (filePath) => ipcRenderer.invoke('openFolder', filePath),
   
   // Memory service methods
   createNewSession: () => ipcRenderer.invoke('create-new-session'),
